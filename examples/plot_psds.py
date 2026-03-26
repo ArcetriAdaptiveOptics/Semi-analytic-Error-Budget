@@ -83,8 +83,16 @@ def plot_system_psds(mode_index=0, plot_inputs=False):
     PSD_vibration_zeros = np.zeros_like(PSD_atmosf)
 
     # 3. Build Transfer Functions
-    H_r = build_transfer_function(gain_array, omega, t_0, n_actuators, n1, n2, n3, d1, d2, d3, "H_r")
-    H_n = build_transfer_function(gain_array, omega, t_0, n_actuators, n1, n2, n3, d1, d2, d3, "H_n")
+    plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
+    plant_den = np.polymul(np.polymul(np.asarray(d1), np.asarray(d2)), np.asarray(d3))
+    H_r, H_n = build_transfer_function(
+        omega,
+        t_0,
+        n_actuators,
+        plant_num,
+        plant_den,
+        gain=gain_array,
+    )
 
     # 4. Compute Optical Gain (needed for aliasing)
     c_optg = compute_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius)

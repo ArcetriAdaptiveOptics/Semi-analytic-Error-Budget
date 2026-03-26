@@ -113,9 +113,15 @@ def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay, wvl_wfs):
     """
     gain_arr = np.full(n_modes, gain)
     d2  = funct_d2(delay)
-    H_n = build_transfer_function(
-        gain_arr, omega, t0, n_modes,
-        [1], [1], [1], [1], d2, [1], "H_n",
+    plant_num = np.array([1.0])
+    plant_den = d2
+    _, H_n = build_transfer_function(
+        omega,
+        t0,
+        n_modes,
+        plant_num,
+        plant_den,
+        gain=gain_arr,
     )
 
     # Invert nph to photon_flux for the SA function

@@ -148,6 +148,9 @@ PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs)
 
 d2 = funct_d2(total_delay)
+plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
+plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
+
 
 c_optg = 0
 
@@ -156,9 +159,15 @@ if system == "ANDES":
     c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing, modulation_radius)
 
 
-H_r_temp = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_r")
-H_n_meas = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_n")
-H_n_alias = build_transfer_function(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3,d1, d2, d3,"H_n")
+H_r_temp, H_n_meas = build_transfer_function(
+    omega_temporal_freqs,
+    t_0,
+    n_actuators,
+    plant_num,
+    plant_den,
+    gain=gain_,
+)
+H_n_alias = H_n_meas
 
 
 #################
@@ -234,7 +243,7 @@ var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL)
 if display:
 
     plot_total_variance_mode_0(gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-                               t_0, n1, n2, n3, d1, d2, d3, telescope_diameter, fried_param, F_excess_noise,
+                               t_0, plant_num, plant_den, telescope_diameter, fried_param, F_excess_noise,
                                sky_background, dark_current, readout_noise, phot_flux, frame_rate, magnitude,
                                n_subapert, collecting_area, x_pixel, fitting_coeff, alpha_, seeing,
                                modulation_radius, wind_speed, maximum_radial_order, file_path_R1, file_optg,

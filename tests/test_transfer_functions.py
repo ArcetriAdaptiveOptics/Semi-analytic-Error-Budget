@@ -53,17 +53,20 @@ class TestTransferFunctions(unittest.TestCase):
         gain_arr = np.array([_GAIN]) # Single mode test
         n_modes = 1
 
-        # Build H_r (Rejection TF)
-        cls.H_r_sa = build_transfer_function(
-            gain_arr, cls.omega, cls.t0, n_modes,
-            [1], [1], [1], [1], d2, [1], "H_r"
-        )[0, :]
+        plant_num = np.array([1.0])
+        plant_den = d2
 
-        # Build H_n (Noise TF)
-        cls.H_n_sa = build_transfer_function(
-            gain_arr, cls.omega, cls.t0, n_modes,
-            [1], [1], [1], [1], d2, [1], "H_n"
-        )[0, :]
+        H_r_sa, H_n_sa = build_transfer_function(
+            cls.omega,
+            cls.t0,
+            n_modes,
+            plant_num,
+            plant_den,
+            gain=gain_arr,
+        )
+
+        cls.H_r_sa = H_r_sa[0, :]
+        cls.H_n_sa = H_n_sa[0, :]
 
         # =====================================================================
         # P3 COMPUTATION (from fourierModel.py -> controller)

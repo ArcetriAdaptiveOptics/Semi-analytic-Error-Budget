@@ -38,7 +38,7 @@ from src.Functions import align_psd_modes
 # by combining fitting, temporal, aliasing and measurement error contributions 
   
 def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_interval, t_freqs, f,
-                            t_0, num1, num2, num3, den1, den2, den3, telescope_diameter, fried_parameter,
+                            t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
                             excess_noise_factor, sky_background, dark_current, readout_noise,
                             photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
                             slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
@@ -55,9 +55,15 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
 
 ###########################       
         
-        H_r_temp = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_r")
-        H_n_meas = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_n")
-        H_n_alias = build_transfer_function(gain_val, omega_temp_freq_interval, t_0, number_of_actuators, num1, num2, num3, den1, den2, den3,"H_n")
+        H_r_temp, H_n_meas = build_transfer_function(
+            omega_temp_freq_interval,
+            t_0,
+            number_of_actuators,
+            plant_num,
+            plant_den,
+            gain=gain_val,
+        )
+        H_n_alias = H_n_meas
         
         
         variance_fit = fitting_variance(fitting_coeff, number_of_actuators, telescope_diameter, fried_parameter)
@@ -101,8 +107,8 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
 # Function to plot the total residual variance of the system as a function 
 # of the gain, considering only the first mode.
 
-def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f, t_0, num1, num2, 
-                               num3, den1, den2, den3, telescope_diameter, fried_parameter, excess_noise_factor,
+def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f, t_0, plant_num,
+                               plant_den, telescope_diameter, fried_parameter, excess_noise_factor,
                                sky_background, dark_current, readout_noise, photon_flux, frame_rate, magnitude,
                                n_subaperture, collecting_area, slope_computer_weights, fitting_coeff, alpha, seeing,
                                modulation_radius, wind_speed, maximum_radial_order_corrected,
@@ -116,7 +122,7 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
      
     gain_value = np.arange(gain_min, gain_max, 0.1)
     variance_total = variance_total_for_test(actuators_number, gain_value, omega_temp_freq_interval, t_freqs, f,
-                                             t_0, num1, num2, num3, den1, den2, den3, telescope_diameter, 
+                                             t_0, plant_num, plant_den, telescope_diameter,
                                              fried_parameter, excess_noise_factor, sky_background, dark_current,
                                              readout_noise, photon_flux, frame_rate, magnitude, n_subaperture,
                                              collecting_area, slope_computer_weights, fitting_coeff, alpha, seeing,
@@ -602,9 +608,18 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
                            maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
                            photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
                            file_path_matrix_R, file_path_sigma_slopes):
-    
-    H_r = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3, "H_r")
-    H_n = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1,  den2, den3, "H_n")
+
+    plant_num = np.polymul(np.polymul(np.asarray(num1), np.asarray(num2)), np.asarray(num3))
+    plant_den = np.polymul(np.polymul(np.asarray(den1), np.asarray(den2)), np.asarray(den3))
+
+    H_r, H_n = build_transfer_function(
+        omega_temp_freq_interval,
+        t_0,
+        actuators_number,
+        plant_num,
+        plant_den,
+        gain=gain,
+    )
     
     if np.array_equal(temporal_frequencies, frequencies):
     

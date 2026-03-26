@@ -215,12 +215,17 @@ def run(yaml_file):
     if system == "ANDES":
         c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing_, modulation_radius)
 
-    H_r_temp = build_transfer_function(gain_, omega_temporal_freqs,
-                                       t_0, n_actuators, n1, n2, n3,
-                                       d1, d2, d3, "H_r")
-    H_n_meas = build_transfer_function(gain_, omega_temporal_freqs,
-                                       t_0, n_actuators, n1, n2, n3,
-                                       d1, d2, d3, "H_n")
+    plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
+    plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
+
+    H_r_temp, H_n_meas = build_transfer_function(
+        omega_temporal_freqs,
+        t_0,
+        n_actuators,
+        plant_num,
+        plant_den,
+        gain=gain_,
+    )
     H_n_alias = H_n_meas
 
     var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried_param)

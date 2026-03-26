@@ -18,11 +18,11 @@ from scipy import integrate as scipy_integrate
 
 from src.Functions import (
     _load_andes_gain_grid,
+    build_integrator_controller_polynomials,
     compute_k_prime,
     compute_noise_PSD,
     compute_slope_noise_variance,
     flux_for_frame_for_pixel,
-    funct_C,
     funct_d2,
     fitting_variance,
     func_out,
@@ -254,27 +254,20 @@ class TestFunctC(unittest.TestCase):
     def test_numerator_polynomial_coefficients(self):
         # Numerator of g*Z/(Z-1) is g*Z: polynomial coefficients [g, 0]
         gain = 0.5
-        n4, _, _ = funct_C(gain, np.array([1.0]), t_0=0.001)
-        np.testing.assert_array_almost_equal(np.real(n4), [gain, 0.0], decimal=12)
+        num_int, _ = build_integrator_controller_polynomials(gain)
+        np.testing.assert_array_almost_equal(np.real(num_int), [gain, 0.0], decimal=12)
 
     def test_denominator_polynomial_coefficients(self):
         # Denominator of g*Z/(Z-1) is (Z-1): polynomial coefficients [1, -1]
-        _, d4, _ = funct_C(1.0, np.array([1.0]), t_0=0.001)
-        np.testing.assert_array_almost_equal(np.real(d4), [1.0, -1.0], decimal=12)
-
-    def test_Z_numeric_equals_exp_formula(self):
-        # Z = exp(i * omega * t_0)
-        omega = np.array([0.0, np.pi, 2 * np.pi])
-        t_0 = 0.001
-        _, _, Z = funct_C(1.0, omega, t_0)
-        np.testing.assert_array_almost_equal(Z, np.exp(1j * omega * t_0), decimal=12)
+        _, den_int = build_integrator_controller_polynomials(1.0)
+        np.testing.assert_array_almost_equal(np.real(den_int), [1.0, -1.0], decimal=12)
 
     def test_numerator_scales_with_gain(self):
         # Doubling the gain doubles the leading numerator coefficient
-        n4_1, _, _ = funct_C(1.0, np.array([1.0]), 0.001)
-        n4_2, _, _ = funct_C(2.0, np.array([1.0]), 0.001)
+        num_int_1, _ = build_integrator_controller_polynomials(1.0)
+        num_int_2, _ = build_integrator_controller_polynomials(2.0)
         self.assertAlmostEqual(
-            np.real(n4_2[0]) / np.real(n4_1[0]), 2.0, places=12
+            np.real(num_int_2[0]) / np.real(num_int_1[0]), 2.0, places=12
         )
 
 
@@ -293,40 +286,38 @@ class TestTransferFunct(unittest.TestCase):
     @staticmethod
     def _dc_inputs(gain=0.5):
         """Return polynomial arrays evaluated at DC (omega=0)."""
-        n1 = np.array([1.0])
-        n2 = np.array([1.0])
-        n3 = np.array([1.0])
-        d1 = np.array([1.0])
-        d3 = np.array([1.0])
-        d2 = funct_d2(1)               # delay of 1 frame
+        plant_num = np.array([1.0])   # n1*n2*n3 = 1
+        plant_den = funct_d2(1)        # d1*d2*d3 = delay polynomial
         omega_dc = np.array([0.0])
-        n4, d4, Z = funct_C(gain, omega_dc, t_0=0.001)
-        return n1, n2, n3, n4, d1, d2, d3, d4, Z
+        num_int, den_int = build_integrator_controller_polynomials(gain)
+        Z = np.exp(1j * omega_dc * 0.001)
+        return plant_num, num_int, plant_den, den_int, Z
 
     def test_H_n_equals_one_at_DC(self):
         # Integral control has unity DC gain on the noise path
-        n1, n2, n3, n4, d1, d2, d3, d4, Z = self._dc_inputs(gain=0.5)
-        H_n = transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, "H_n")
+        plant_num, num_int, plant_den, den_int, Z = self._dc_inputs(gain=0.5)
+        H_n = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_n")
         self.assertAlmostEqual(abs(H_n[0]), 1.0, places=6)
 
     def test_H_r_equals_zero_at_DC(self):
         # Integral control perfectly rejects a DC disturbance
-        n1, n2, n3, n4, d1, d2, d3, d4, Z = self._dc_inputs(gain=0.5)
-        H_r = transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, "H_r")
+        plant_num, num_int, plant_den, den_int, Z = self._dc_inputs(gain=0.5)
+        H_r = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_r")
         self.assertAlmostEqual(abs(H_r[0]), 0.0, places=6)
 
     def test_invalid_type_raises_ValueError(self):
-        n1, n2, n3, n4, d1, d2, d3, d4, Z = self._dc_inputs()
+        plant_num, num_int, plant_den, den_int, Z = self._dc_inputs()
         with self.assertRaises(ValueError):
-            transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, "bad_type")
+            transfer_funct(plant_num, num_int, plant_den, den_int, Z, "bad_type")
 
     def test_output_length_matches_frequency_vector(self):
         n_freq = 50
         omega = np.linspace(0.01, 100.0, n_freq)
-        n4, d4, Z = funct_C(0.3, omega, 0.001)
-        n1 = n2 = n3 = d1 = d3 = np.array([1.0])
-        d2 = funct_d2(1)
-        H_r = transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, "H_r")
+        num_int, den_int = build_integrator_controller_polynomials(0.3)
+        Z = np.exp(1j * omega * 0.001)
+        plant_num = np.array([1.0])
+        plant_den = funct_d2(1)
+        H_r = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_r")
         self.assertEqual(len(H_r), n_freq)
 
 

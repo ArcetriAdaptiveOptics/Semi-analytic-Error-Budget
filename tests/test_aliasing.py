@@ -138,9 +138,15 @@ class TestAliasingVariance(unittest.TestCase):
         d2 = funct_d2(_DELAY)
         gain_arr = np.full(_N_MODES, _GAIN)
 
-        H_n = build_transfer_function(
-            gain_arr, _OMEGA, _T0, _N_MODES,
-            [1], [1], [1], [1], d2, [1], "H_n"
+        plant_num = np.array([1.0])
+        plant_den = d2
+        _, H_n = build_transfer_function(
+            _OMEGA,
+            _T0,
+            _N_MODES,
+            plant_num,
+            plant_den,
+            gain=gain_arr,
         )
 
         # 2. Compute Optical Gain for ANDES

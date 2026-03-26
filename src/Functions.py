@@ -76,111 +76,232 @@ def funct_d2 (T_total):
     return d2
 
 
-# Function that returns the numerator and denominator of the transfer function C, 
-# expressed as polynomials in Z. The function also returns the numeric definition of Z.
-# For the moment, we are considering the control function C as defined below,
-# which means that we are using an integral control.
+# Function that returns the numerator and denominator of the integrator controller C = g*Z/(Z-1)
+# expressed as polynomials in Z (descending powers, np.polyval convention).
 
-def funct_C (gain, omega_temp_freq_interval, t_0):    
-    
-    Z_symbolic = sp.symbols('Z')                                                   
-    C = (Z_symbolic * gain) / (Z_symbolic - 1)                                    
-    
-    # Estraggo numeratore e denominatore
-    num, den = sp.fraction(C)                                                      
-    
-    # Ottengo i coefficienti come array NumPy
-    n4 = np.array(sp.Poly(num, Z_symbolic).all_coeffs(), dtype=complex)          
-    d4 = np.array(sp.Poly(den, Z_symbolic).all_coeffs(), dtype=complex)        
-    
-    Z_numeric = np.exp(1j * omega_temp_freq_interval * t_0)
-    
-    return n4, d4, Z_numeric
+def build_integrator_controller_polynomials(gain):
+
+    Z_symbolic = sp.symbols('Z')
+    C = (Z_symbolic * gain) / (Z_symbolic - 1)
+
+    num, den = sp.fraction(C)
+
+    num_int = np.array(sp.Poly(num, Z_symbolic).all_coeffs(), dtype=complex)
+    den_int = np.array(sp.Poly(den, Z_symbolic).all_coeffs(), dtype=complex)
+
+    return num_int, den_int
+
+
+def funct_C(gain, omega_temp_freq_interval=None, t_0=None):
+    """Backward-compatible alias for build_integrator_controller_polynomials."""
+    return build_integrator_controller_polynomials(gain)
   
   
 # Function to compute the numerator and denominator polynomials of the transfer functions H_r and H_n
 # using np.polymul, np.polyadd and polyval (to evaluate them at Z).
 # The expressions written below were derived from Equations (4) and (5) (in "Semianalytical error budget 
-# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019)
-# through appropriate algebraic steps, allowing us to use np.polymul, np.polyadd,
-# and np.polyval to construct the numerator and denominator of H_r and H_n.
-# WFS = n1 / d1, Reconstructor and delay = n2 / d2, deformable Mirror = n3 / d3 and Controller = n4 / d4.
+# for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019).
+# The plant (WFS * Reconstructor+Delay * DM) is represented by its pre-multiplied polynomials
+# plant_num and plant_den.  The controller for a single mode is controller_num / controller_den.
 
-def transfer_funct(n1, n2, n3, n4, d1, d2, d3, d4, Z, transfer_function_type):    
-   
-    H_r_coeff_num = reduce(np.polymul, [d1, d2, d3, d4])                       
-    H_r_coeff_den = np.polyadd(reduce(np.polymul, [d1, d2, d3, d4]), reduce(np.polymul, [n1, n2, n3, n4]))
-    H_n_coeff_num = reduce(np.polymul, [n2, n3, n4, d1])
-    H_n_coeff_den = H_r_coeff_den                                              
-    
-    H_r_num = np.polyval (H_r_coeff_num, Z)                                    
-    H_r_den = np.polyval (H_r_coeff_den, Z)
-    H_n_num = np.polyval (H_n_coeff_num, Z)
-    H_n_den = np.polyval (H_n_coeff_den, Z)
-    
-    
+def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z, transfer_function_type):
+    """Evaluate H_r or H_n for a single mode.
+
+    Parameters
+    ----------
+    plant_num : array_like
+        Pre-multiplied plant numerator polynomial (np.polyval convention).
+    controller_num : array_like
+        Controller numerator polynomial for this mode.
+    plant_den : array_like
+        Pre-multiplied plant denominator polynomial.
+    controller_den : array_like
+        Controller denominator polynomial for this mode.
+    Z : array_like
+        Complex frequency vector.
+    transfer_function_type : str
+        ``'H_r'`` (rejection) or ``'H_n'`` (noise/aliasing).
+    """
+    H_r_coeff_num = np.polymul(plant_den, controller_den)
+    H_r_coeff_den = np.polyadd(
+        np.polymul(plant_den, controller_den),
+        np.polymul(plant_num, controller_num),
+    )
+    H_n_coeff_num = np.polymul(plant_num, controller_num)
+    H_n_coeff_den = H_r_coeff_den
+
+    H_r_num = np.polyval(H_r_coeff_num, Z)
+    H_r_den = np.polyval(H_r_coeff_den, Z)
+    H_n_num = np.polyval(H_n_coeff_num, Z)
+    H_n_den = np.polyval(H_n_coeff_den, Z)
+
     if transfer_function_type == "H_r":
-        
-        H_r = H_r_num/ H_r_den
-        return H_r
+        return H_r_num / H_r_den
 
     if transfer_function_type == "H_n":
-        
-        H_n = H_n_num/ H_n_den
-        return H_n
-    
-    else: 
-        raise ValueError("Transfer_function_type must be one of 'H_r' o 'H_n'")
-        
-        
-# Function to compute the numerator and denominator coefficients (n4 and d4) of the transfer function C 
-# for all actuators, and to return the numeric Z vector from funct_C.
+        return H_n_num / H_n_den
 
-def compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number):
-    
-    n4_array_example, d4_array_example, _ = funct_C(gain[0], omega_temp_freq_interval, t_0)        
- 
-    len_n4 =  len(n4_array_example)
-    len_d4 =  len(d4_array_example)
- 
-    n4_array = np.zeros((actuators_number, len_n4), dtype=complex)      
-    d4_array = np.zeros((actuators_number, len_d4), dtype=complex)      
-       
-    for i in range (actuators_number):                                   
-         
-        n4_array[i, :], d4_array[i, :], Z_num = funct_C (gain[i], omega_temp_freq_interval, t_0)     
-         
-    return n4_array, d4_array, Z_num
+    raise ValueError("Transfer_function_type must be one of 'H_r' or 'H_n'")
+        
+        
+# Function to compute the controller (num_int, den_int) polynomial arrays for all modes using an integrator.
+
+def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
+
+    num_int_example, den_int_example = build_integrator_controller_polynomials(gain[0])
+
+    num_int_array = np.zeros((actuators_number, len(num_int_example)), dtype=complex)
+    den_int_array = np.zeros((actuators_number, len(den_int_example)), dtype=complex)
+
+    for i in range(actuators_number):
+        num_int_array[i, :], den_int_array[i, :] = build_integrator_controller_polynomials(gain[i])
+
+    return num_int_array, den_int_array
   
 
-# Function to compute the transfer function H.
+# Function to compute the transfer function H for all modes.
 # The 'transfer_function_type' argument selects between two different types of transfer functions: "H_r" or "H_n".
 
-def compute_H(actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, den2,
-              den3, den4, Z, transfer_function_type):
-    
+def compute_H(actuators_number, omega_temp_freq_interval, plant_num, controller_num_matrix, plant_den, controller_den_matrix, Z, transfer_function_type):
+
     H = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
-    
+
     for i in range(actuators_number):
-        
-        H[i, :] = transfer_funct(num1, num2, num3, num4[i, :], den1, den2, den3, den4[i, :], Z,
-                                transfer_function_type)
-            
+        H[i, :] = transfer_funct(
+            plant_num,
+            controller_num_matrix[i, :],
+            plant_den,
+            controller_den_matrix[i, :],
+            Z,
+            transfer_function_type,
+        )
+
     return H
 
 
-# Function to compute the transfer function H; it internally computes n4 and d4 
-# (numerator and denominator of function C) and then builds H using these polynomials.
+def _as_controller_coefficient_matrix(coefficients, actuators_number, coefficient_name):
 
-def build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, 
-                            den2, den3, transfer_function_type):   
-    
-    num4, den4, Z = compute_n4_d4(gain, omega_temp_freq_interval, t_0, actuators_number)
+    coefficients = np.asarray(coefficients, dtype=complex)
 
-    transfer_function = compute_H (actuators_number, omega_temp_freq_interval, num1, num2, num3, num4, den1, 
-                                   den2, den3, den4, Z, transfer_function_type)
-         
-    return transfer_function    
+    if coefficients.ndim == 1:
+        if coefficients.size == 0:
+            raise ValueError(f"{coefficient_name} must not be empty")
+        return np.tile(coefficients[np.newaxis, :], (actuators_number, 1))
+
+    if coefficients.ndim == 2:
+        if coefficients.shape[1] == 0:
+            raise ValueError(f"{coefficient_name} must not be empty")
+
+        if coefficients.shape[0] == 1 and actuators_number > 1:
+            return np.repeat(coefficients, actuators_number, axis=0)
+
+        if coefficients.shape[0] != actuators_number:
+            raise ValueError(
+                f"{coefficient_name} must have shape (N_coeff,) or (N_modes, N_coeff); "
+                f"received {coefficients.shape} for N_modes={actuators_number}"
+            )
+
+        return coefficients
+
+    raise ValueError(f"{coefficient_name} must be a 1D or 2D array")
+
+
+def build_transfer_function_from_controller_polynomials(controller_num, controller_den,
+                                                        omega_temp_freq_interval, t_0,
+                                                        actuators_number, plant_num, plant_den,
+                                                        transfer_function_type):
+    """
+    Build the closed-loop transfer function using explicit controller polynomials.
+
+    Parameters
+    ----------
+    controller_num : array_like
+        Controller numerator polynomial (descending powers of Z).
+        Shape ``(N_coeff,)`` (broadcast to all modes) or ``(N_modes, N_coeff)``.
+        An integrator C(Z) = g Z / (Z-1) → ``[g, 0]``.
+    controller_den : array_like
+        Controller denominator polynomial.  Same shape rules as above.
+    omega_temp_freq_interval : array_like
+        Angular temporal frequency vector [rad s⁻¹].
+    t_0 : float
+        Sampling period [s].
+    actuators_number : int
+        Number of modes / actuators.
+    plant_num : array_like
+        Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
+    plant_den : array_like
+        Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
+    transfer_function_type : str
+        ``'H_r'`` or ``'H_n'``.
+    """
+    controller_num_matrix = _as_controller_coefficient_matrix(
+        controller_num, actuators_number, "controller_num"
+    )
+    controller_den_matrix = _as_controller_coefficient_matrix(
+        controller_den, actuators_number, "controller_den"
+    )
+
+    if np.any(np.isclose(controller_den_matrix[:, 0], 0.0)):
+        raise ValueError("The leading controller denominator coefficient must be non-zero")
+
+    Z = np.exp(1j * np.asarray(omega_temp_freq_interval) * t_0)
+
+    return compute_H(actuators_number, omega_temp_freq_interval,
+                     plant_num, controller_num_matrix, plant_den, controller_den_matrix, Z, transfer_function_type)
+
+
+# Function to compute the transfer function H.
+# The plant is given as pre-multiplied polynomials plant_num and plant_den.
+# The controller is either an integrator (pass gain=) or explicit IIR polynomials
+# (pass controller_num= and controller_den=).
+
+def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
+                            plant_num, plant_den,
+                            *, gain=None, controller_num=None, controller_den=None):
+    """Build both closed-loop transfer functions H_r and H_n.
+
+    Parameters
+    ----------
+    omega_temp_freq_interval : array_like
+        Angular temporal frequency vector [rad s⁻¹].
+    t_0 : float
+        Sampling period [s].
+    actuators_number : int
+        Number of modes / actuators.
+    plant_num : array_like
+        Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
+    plant_den : array_like
+        Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
+    gain : array_like, optional
+        Per-mode integrator gain vector.  Mutually exclusive with
+        ``controller_num``/``controller_den``.
+    controller_num : array_like, optional
+        Explicit controller numerator (descending powers of Z).
+    controller_den : array_like, optional
+        Explicit controller denominator (descending powers of Z).
+    """
+    if gain is not None:
+        ctrl_num, ctrl_den = compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number)
+    elif controller_num is not None and controller_den is not None:
+        ctrl_num = controller_num
+        ctrl_den = controller_den
+    else:
+        raise ValueError(
+            "Provide either 'gain' (integrator) or both "
+            "'controller_num' and 'controller_den'"
+        )
+
+    H_r = build_transfer_function_from_controller_polynomials(
+        ctrl_num, ctrl_den, omega_temp_freq_interval, t_0, actuators_number,
+        plant_num, plant_den, "H_r"
+    )
+
+    H_n = build_transfer_function_from_controller_polynomials(
+        ctrl_num, ctrl_den, omega_temp_freq_interval, t_0, actuators_number,
+        plant_num, plant_den, "H_n"
+    )
+
+    return H_r, H_n
     
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
@@ -866,14 +987,23 @@ def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, a
 
 # Function to compute the total PSDs (temp + alias + meas) OL and CL 
 
-def total_PSD_OL_CL (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
-                     PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                     maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
-                     photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
-                     file_path_matrix_R, file_path_sigma_slopes):
-    
-    H_r = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3, "H_r")
-    H_n = build_transfer_function(gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1,  den2, den3, "H_n")
+def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, plant_den,
+                    PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed,
+                    maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
+                    photon_flux, frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies,
+                    file_path_matrix_R, file_path_sigma_slopes,
+                    *, gain=None, controller_num=None, controller_den=None):
+
+    H_r, H_n = build_transfer_function(
+        omega_temp_freq_interval,
+        t_0,
+        actuators_number,
+        plant_num,
+        plant_den,
+        gain=gain,
+        controller_num=controller_num,
+        controller_den=controller_den,
+    )
     
    
     PSD_out_temp, PSD_in_temp, PSD_out_alias, PSD_in_alias, PSD_out_meas, PSD_in_meas = compute_PSD_OL_CL(PSD_atmo_turb, PSD_vibration, 
@@ -903,6 +1033,255 @@ def total_variance(fit_err, temp_err, alias_err, meas_err):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
     print ("Total variance:", var_tot)
     return var_tot 
+
+
+@dataclass
+class SingleModeControllerOptimizationRecord:
+    controller_num: np.ndarray
+    controller_den: np.ndarray
+    cost: float
+    variance_terms: dict
+
+
+@dataclass
+class SingleModeControllerOptimizationResult:
+    controller_num: np.ndarray
+    controller_den: np.ndarray
+    cost: float
+    variance_terms: dict
+    psd_input: dict
+    psd_output: dict
+    transfer_function: dict
+
+
+@dataclass
+class SingleModeControllerOptimizationContext:
+    mode_index: int
+    omega_temp_freq_interval: np.ndarray
+    t_0: float
+    num1: np.ndarray
+    num2: np.ndarray
+    num3: np.ndarray
+    den1: np.ndarray
+    den2: np.ndarray
+    den3: np.ndarray
+    static_fit_variance: float
+    PSD_input_atmos: np.ndarray
+    PSD_input_vibration: np.ndarray
+    PSD_input_alias: np.ndarray
+    PSD_input_measurement: np.ndarray
+    history: list = field(default_factory=list)
+
+    def evaluate(self, controller_num, controller_den, store_history=True):
+        H_r = build_transfer_function_from_controller_polynomials(
+            controller_num, controller_den,
+            self.omega_temp_freq_interval, self.t_0,
+            1, self.num1, self.num2, self.num3, self.den1, self.den2, self.den3,
+            "H_r"
+        )
+        H_n = build_transfer_function_from_controller_polynomials(
+            controller_num, controller_den,
+            self.omega_temp_freq_interval, self.t_0,
+            1, self.num1, self.num2, self.num3, self.den1, self.den2, self.den3,
+            "H_n"
+        )
+
+        PSD_output_atmos = func_out(H_r[0, :], self.PSD_input_atmos[0, :])[np.newaxis, :]
+        PSD_output_vibration = func_out(H_r[0, :], self.PSD_input_vibration[0, :])[np.newaxis, :]
+        PSD_output_temporal = PSD_output_atmos + PSD_output_vibration
+        PSD_output_alias = func_out(H_n[0, :], self.PSD_input_alias[0, :])[np.newaxis, :]
+        PSD_output_measurement = func_out(H_n[0, :], self.PSD_input_measurement[0, :])[np.newaxis, :]
+        PSD_output_total = PSD_output_temporal + PSD_output_alias + PSD_output_measurement
+
+        var_temp_atmos = integrate_function(PSD_output_atmos[0, :], self.omega_temp_freq_interval)
+        var_temp_vibration = integrate_function(PSD_output_vibration[0, :], self.omega_temp_freq_interval)
+        var_temp_total = var_temp_atmos + var_temp_vibration
+        var_alias = integrate_function(PSD_output_alias[0, :], self.omega_temp_freq_interval)
+        var_measurement = integrate_function(PSD_output_measurement[0, :], self.omega_temp_freq_interval)
+        cost = total_variance(self.static_fit_variance, var_temp_total, var_alias, var_measurement)
+
+        variance_terms = {
+            "fitting": float(np.real(self.static_fit_variance)),
+            "temporal_atmosphere": float(np.real(var_temp_atmos)),
+            "temporal_vibration": float(np.real(var_temp_vibration)),
+            "temporal": float(np.real(var_temp_total)),
+            "aliasing": float(np.real(var_alias)),
+            "measurement": float(np.real(var_measurement)),
+            "total": float(np.real(cost)),
+        }
+
+        result = SingleModeControllerOptimizationResult(
+            controller_num=np.array(controller_num, dtype=complex, copy=True),
+            controller_den=np.array(controller_den, dtype=complex, copy=True),
+            cost=float(np.real(cost)),
+            variance_terms=variance_terms,
+            psd_input={
+                "atmosphere": np.array(self.PSD_input_atmos, copy=True),
+                "vibration": np.array(self.PSD_input_vibration, copy=True),
+                "temporal": np.array(self.PSD_input_atmos + self.PSD_input_vibration, copy=True),
+                "aliasing": np.array(self.PSD_input_alias, copy=True),
+                "measurement": np.array(self.PSD_input_measurement, copy=True),
+                "total": np.array(
+                    self.PSD_input_atmos + self.PSD_input_vibration + self.PSD_input_alias + self.PSD_input_measurement,
+                    copy=True,
+                ),
+            },
+            psd_output={
+                "atmosphere": PSD_output_atmos,
+                "vibration": PSD_output_vibration,
+                "temporal": PSD_output_temporal,
+                "aliasing": PSD_output_alias,
+                "measurement": PSD_output_measurement,
+                "total": PSD_output_total,
+            },
+            transfer_function={
+                "H_r": np.array(H_r, copy=True),
+                "H_n": np.array(H_n, copy=True),
+            },
+        )
+
+        if store_history:
+            self.history.append(
+                SingleModeControllerOptimizationRecord(
+                    controller_num=np.array(controller_num, dtype=complex, copy=True),
+                    controller_den=np.array(controller_den, dtype=complex, copy=True),
+                    cost=float(np.real(cost)),
+                    variance_terms=dict(variance_terms),
+                )
+            )
+
+        return result
+
+
+def _select_single_mode_psd(PSD_in, mode_index, array_name, n_frequencies, allow_missing=False):
+
+    PSD_in = np.asarray(PSD_in, dtype=float)
+
+    if PSD_in.ndim != 2:
+        raise ValueError(f"{array_name} must be a 2D array")
+
+    if PSD_in.shape[1] != n_frequencies:
+        raise ValueError(
+            f"{array_name} must have {n_frequencies} frequency samples; got {PSD_in.shape[1]}"
+        )
+
+    if mode_index < PSD_in.shape[0]:
+        return PSD_in[mode_index:mode_index + 1, :]
+
+    if allow_missing:
+        return np.zeros((1, n_frequencies), dtype=float)
+
+    raise ValueError(
+        f"Requested mode_index={mode_index} for {array_name}, but only {PSD_in.shape[0]} modes are available"
+    )
+
+
+def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interval, t_0,
+                                             PSD_atmo_turb, PSD_vibration,
+                                             alpha, telescope_diameter, seeing,
+                                             modulation_radius, windspeed,
+                                             maximum_radial_order_corrected, c_optg,
+                                             F_excess, pixel_pos, sky_bkg, dark_curr,
+                                             read_out_noise, photon_flux, frame_rate,
+                                             magnitudo, n_subaperture, collecting_area,
+                                             file_path_matrix_R,
+                                             file_path_sigma_slopes=None,
+                                             static_fit_variance=0.0,
+                                             num1=None, num2=None, num3=None,
+                                             den1=None, den2=None, den3=None):
+    """
+    Prepare a reusable single-mode optimization context for an IIR controller.
+
+    This function precomputes all controller-independent inputs:
+      - temporal input PSDs (atmosphere and vibration),
+      - aliasing input PSD,
+      - measurement input PSD,
+      - static cost contribution (e.g. fitting variance).
+
+    The returned context can then evaluate many controller candidates cheaply,
+    updating only H_r, H_n and the resulting cost.
+    """
+
+    if mode_index < 0:
+        raise ValueError("mode_index must be >= 0")
+
+    omega_temp_freq_interval = np.asarray(omega_temp_freq_interval, dtype=float).ravel()
+
+    if omega_temp_freq_interval.size == 0:
+        raise ValueError("omega_temp_freq_interval must not be empty")
+
+    if np.isclose(c_optg, 0.0):
+        raise ValueError("c_optg must be non-zero to build aliasing and measurement PSDs")
+
+    n_frequencies = omega_temp_freq_interval.size
+
+    if num1 is None:
+        num1 = np.array([1.0])
+    if num2 is None:
+        num2 = np.array([1.0])
+    if num3 is None:
+        num3 = np.array([1.0])
+    if den1 is None:
+        den1 = np.array([1.0])
+    if den2 is None:
+        den2 = np.array([1.0])
+    if den3 is None:
+        den3 = np.array([1.0])
+
+    PSD_input_atmos = _select_single_mode_psd(PSD_atmo_turb, mode_index, "PSD_atmo_turb",
+                                              n_frequencies, allow_missing=False)
+    PSD_input_vibration = _select_single_mode_psd(PSD_vibration, mode_index, "PSD_vibration",
+                                                  n_frequencies, allow_missing=True)
+
+    k_alias = np.asarray(
+        k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
+                         omega_temp_freq_interval, file_path_matrix_R, windspeed,
+                         maximum_radial_order_corrected, file_path_sigma_slopes),
+        dtype=float,
+    )
+
+    if mode_index >= k_alias.size:
+        raise ValueError(
+            f"Requested mode_index={mode_index}, but aliasing coefficients are available only up to {k_alias.size - 1}"
+        )
+
+    PSD_input_alias = aliasing_psd_from_coeffs(
+        1, omega_temp_freq_interval, np.array([k_alias[mode_index]], dtype=float),
+        alpha, telescope_diameter, windspeed, maximum_radial_order_corrected
+    ) / (c_optg ** 2)
+
+    slope_noise_variance = compute_slope_noise_variance(
+        F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
+        photon_flux, telescope_diameter, frame_rate, magnitudo,
+        n_subaperture, collecting_area
+    )
+
+    p_coefficient = np.asarray(extract_propagation_coefficients(file_path_matrix_R), dtype=float)
+
+    if mode_index >= p_coefficient.size:
+        raise ValueError(
+            f"Requested mode_index={mode_index}, but propagation coefficients are available only up to {p_coefficient.size - 1}"
+        )
+
+    sigma2_w = np.array([p_coefficient[mode_index] * slope_noise_variance], dtype=float)
+    PSD_input_measurement = compute_noise_PSD_intermediate(omega_temp_freq_interval, 1, sigma2_w) / (c_optg ** 2)
+
+    return SingleModeControllerOptimizationContext(
+        mode_index=mode_index,
+        omega_temp_freq_interval=omega_temp_freq_interval,
+        t_0=float(t_0),
+        num1=np.asarray(num1, dtype=float),
+        num2=np.asarray(num2, dtype=float),
+        num3=np.asarray(num3, dtype=float),
+        den1=np.asarray(den1, dtype=float),
+        den2=np.asarray(den2, dtype=float),
+        den3=np.asarray(den3, dtype=float),
+        static_fit_variance=float(np.real(static_fit_variance)),
+        PSD_input_atmos=PSD_input_atmos,
+        PSD_input_vibration=PSD_input_vibration,
+        PSD_input_alias=PSD_input_alias,
+        PSD_input_measurement=PSD_input_measurement,
+    )
 
 
          
