@@ -83,8 +83,7 @@ class TestPrepareSingleModeControlOptimization(unittest.TestCase):
             magnitudo=0.0,
             n_subaperture=1,
             collecting_area=1.0,
-            file_path_matrix_R="dummy.fits",
-            static_fit_variance=0.25,
+            file_path_matrix_R="dummy.fits"
         )
 
         expected_alias = aliasing_psd_from_coeffs(
@@ -98,7 +97,6 @@ class TestPrepareSingleModeControlOptimization(unittest.TestCase):
         np.testing.assert_array_equal(context.PSD_input_vibration, np.zeros((1, 3)))
         np.testing.assert_allclose(context.PSD_input_alias, expected_alias)
         np.testing.assert_allclose(context.PSD_input_measurement, expected_measurement)
-        self.assertEqual(context.static_fit_variance, 0.25)
         mock_k.assert_called_once()
         mock_slope.assert_called_once()
         mock_prop.assert_called_once()
@@ -114,7 +112,6 @@ class TestSingleModeControllerOptimizationContext(unittest.TestCase):
             t_0=0.001,
             plant_num=np.array([1.0]),
             plant_den=funct_d2(1),
-            static_fit_variance=0.5,
             PSD_input_atmos=np.array([[1.0, 1.0, 1.0, 1.0]]),
             PSD_input_vibration=np.array([[0.2, 0.2, 0.2, 0.2]]),
             PSD_input_alias=np.array([[0.1, 0.1, 0.1, 0.1]]),
@@ -124,6 +121,7 @@ class TestSingleModeControllerOptimizationContext(unittest.TestCase):
         result = context.evaluate(
             controller_num=np.array([0.4, 0.0]),
             controller_den=np.array([1.0, -1.0]),
+            store_history=True,
         )
 
         self.assertEqual(len(context.history), 1)
@@ -136,7 +134,7 @@ class TestSingleModeControllerOptimizationContext(unittest.TestCase):
         )
 
         expected_total = total_variance(
-            result.variance_terms["fitting"],
+            0.0,
             result.variance_terms["temporal"],
             result.variance_terms["aliasing"],
             result.variance_terms["measurement"],

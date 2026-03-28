@@ -652,7 +652,7 @@ def double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes
 # Function to compute omega_0 (w_0)
 
 def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
-    
+
     omega0 = 2 * np.pi * (maximum_radial_order_corrected + 1) * windspeed/telescope_diameter
     
     return omega0

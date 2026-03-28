@@ -20,7 +20,7 @@ from src.Functions import (
     _load_andes_gain_grid,
     build_integrator_controller_polynomials,
     compute_k_prime,
-    compute_noise_PSD,
+    compute_noise_PSD_intermediate,
     compute_slope_noise_variance,
     flux_for_frame_for_pixel,
     funct_d2,
@@ -355,7 +355,7 @@ class TestComputeNoisePSD(unittest.TestCase):
         omega     = np.linspace(1.0, 10.0, 200)
         bandwidth = 10.0 - 1.0
         sigma2_w  = np.array([1.0, 4.0])
-        PSD_w     = compute_noise_PSD(np.ones(2), omega, 2, sigma2_w)
+        PSD_w     = compute_noise_PSD_intermediate(omega, 2, sigma2_w)
         for i, s2 in enumerate(sigma2_w):
             np.testing.assert_array_almost_equal(
                 PSD_w[i, :], np.full(200, s2 / bandwidth)
@@ -363,14 +363,14 @@ class TestComputeNoisePSD(unittest.TestCase):
 
     def test_output_shape(self):
         omega    = np.linspace(1.0, 10.0, 50)
-        PSD_w    = compute_noise_PSD(np.ones(3), omega, 3, np.ones(3))
+        PSD_w    = compute_noise_PSD_intermediate(omega, 3, np.ones(3))
         self.assertEqual(PSD_w.shape, (3, 50))
 
     def test_integral_recovers_variance(self):
         # ∫ PSD_w dω over the bandwidth must equal sigma2_w
         omega    = np.linspace(1.0, 10.0, 100001)
         sigma2_w = np.array([3.0])
-        PSD_w    = compute_noise_PSD(np.ones(1), omega, 1, sigma2_w)
+        PSD_w    = compute_noise_PSD_intermediate(omega, 1, sigma2_w)
         recovered = scipy_integrate.simpson(PSD_w[0, :], omega)
         self.assertAlmostEqual(recovered, sigma2_w[0], places=4)
 
@@ -465,13 +465,13 @@ class TestComputeKPrime(unittest.TestCase):
         D, v, N = 38.5, 8.0, 88
         expected = self._formula(omega, alpha, sigma, c, D, v, N)
         self.assertAlmostEqual(
-            compute_k_prime(omega, alpha, sigma, c, D, v, N), expected, places=10
+            compute_k_prime(omega, alpha, sigma, D, v, N)/c**2, expected, places=10
         )
 
     def test_result_is_positive(self):
         omega = np.logspace(0, 3, 200)
         self.assertGreater(
-            compute_k_prime(omega, -17 / 3, 0.01, 0.8, 38.5, 8.0, 88), 0
+            compute_k_prime(omega, -17 / 3, 0.01, 38.5, 8.0, 88), 0
         )
 
 

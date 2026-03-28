@@ -53,7 +53,7 @@ import numpy as np
 # ── Semi-analytic imports ────────────────────────────────────────────────────
 from src.Functions import (
     build_transfer_function,
-    compute_noise_PSD,
+    compute_noise_PSD_intermediate,
     compute_output_PSD_and_integrate,
     compute_slope_noise_variance,
     extract_propagation_coefficients,
@@ -106,7 +106,7 @@ _T0 = 1.0 / _FRAME_RATE
 
 # ── SA helper: noise WFE in nm OPD ──────────────────────────────────────────
 
-def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay, wvl_wfs):
+def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay):
     """
     Compute the SA measurement-noise WFE in nm OPD.
     Calls the real compute_slope_noise_variance function to strictly adhere to DRY.
@@ -145,9 +145,9 @@ def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay, wvl_wfs):
         collecting_area=collecting_area
     )
 
-    sigma2_w = p_coeff[:n_modes] * slope_var
-    PSD_in   = compute_noise_PSD(p_coeff[:n_modes], omega, n_modes, sigma2_w)
-    var_sum, _ = compute_output_PSD_and_integrate(n_modes, H_n, PSD_in, omega)
+    sigma2_w = slope_var * p_coeff[:n_modes]
+    PSD_in   = compute_noise_PSD_intermediate(omega, n_modes, sigma2_w)
+    var_sum, _, _ = compute_output_PSD_and_integrate(n_modes, H_n, PSD_in, omega)
 
     # var_sum is ALREADY in nm^2 because p_coeff are in nm^2
     return float(np.sqrt(abs(var_sum)))
@@ -386,15 +386,15 @@ class TestSAMeasureVariance(unittest.TestCase):
     def test_noise_wfe_is_positive(self):
         wfe = _sa_wfe_nm(
             _N_MODES, _NPH, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         self.assertGreater(wfe, 0.0)
 
     def test_noise_wfe_in_physically_plausible_range_nm(self):
         """SA noise WFE for 1000 ph/sub should be between 0.1 and 10 nm OPD."""
         wfe = _sa_wfe_nm(
-            _N_MODES, _NPH, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _N_MODES, _NPH, 0.0, np.ones_like(self.p_coeff),  # Use p_coeff=1 to isolate slope variance
+            _omega, _T0, _GAIN, _DELAY,
         )
         self.assertGreater(wfe,   0.1, msg=f"SA wfe = {wfe:.2f} nm implausibly small")
         self.assertLess   (wfe,  10.0, msg=f"SA wfe = {wfe:.2f} nm implausibly large")
@@ -406,11 +406,11 @@ class TestSAMeasureVariance(unittest.TestCase):
         """
         wfe_1k = _sa_wfe_nm(
             _N_MODES, 1000.0, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         wfe_4k = _sa_wfe_nm(
             _N_MODES, 4000.0, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         np.testing.assert_allclose(wfe_1k / wfe_4k, 2.0, rtol=1e-10)
 
@@ -418,11 +418,11 @@ class TestSAMeasureVariance(unittest.TestCase):
         """Adding RON (ron=3 e-, ron_var=9 e-²) must increase the noise WFE."""
         wfe_shot = _sa_wfe_nm(
             _N_MODES, _NPH, 0.0,         self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         wfe_ron = _sa_wfe_nm(
             _N_MODES, _NPH, 3.0 ** 2,   self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         self.assertGreater(wfe_ron, wfe_shot)
 
@@ -469,7 +469,7 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
         wfe_p3 = float(self.fao.wfeN)   # nm OPD, from P3 error breakdown
         wfe_sa = _sa_wfe_nm(
             _N_MODES, _NPH, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         ratio = max(wfe_p3, wfe_sa) / min(wfe_p3, wfe_sa)
         self.assertLess(
@@ -504,11 +504,11 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
         # SA: compare nph=1000 vs nph=4000
         wfe_sa_ref = _sa_wfe_nm(
             _N_MODES, 1000.0, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         wfe_sa_hi = _sa_wfe_nm(
             _N_MODES, 4000.0, 0.0, self.p_coeff,
-            _omega, _T0, _GAIN, _DELAY, _WVL_WFS,
+            _omega, _T0, _GAIN, _DELAY,
         )
         ratio_sa = wfe_sa_ref / wfe_sa_hi
 
