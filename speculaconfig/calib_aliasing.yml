@@ -1,0 +1,49 @@
+# Aliasing Calibration
+# ================================================
+# Override main simulation parameters
+main_override:
+  total_time: 11.76                # 20'000 frames x 0.000588 s
+
+################################## ATMO RESIDUAL #####################################
+
+# DM applying partial correction
+perfect_dm:
+  class: 'DM'
+  simul_params_ref:  'main'
+  ifunc_object:      'asm_ifunc'      # Our computed influence functions
+  m2c_object:        'asm_m2c'        # Modal-to-command matrix
+  nmodes:            630              # Number of controlled modes
+  height:            0.0              # Ground-conjugated DM
+  inputs:
+    in_command: 'atmo_modes.out_modes'
+  outputs: ['out_layer']
+
+ef_prop_override:
+  inputs:
+    in_ef1: 'prop.out_source_ngs_ef'   # Turbulence
+    in_ef2: 'perfect_dm.out_layer'              # Partial correction
+  outputs: ['out_ef']
+
+######################################################################################
+
+pyr_override:
+  inputs: 
+    in_ef: 'ef_prop.out_ef'
+
+# Disable noise for clean measurements
+ocam_override:
+  photon_noise:   false                   # No photon noise
+  readout_noise:  false                   # No read noise
+  excess_noise:   false                   # No excess noise
+
+
+# Data store for results
+data_store_override:
+  class:             'DataStore'            # Data result directory: 'store_dir'/TN/
+  create_tn: false
+  inputs:
+    input_list: ['pyr_modes-pyr_modalrec.out_modes',]
+
+
+# Remove unnecessary objects during calibration
+remove: ['dm_mode_res','filter','psf','dm'] #, 'bootstrap', 'concat_wfs_modes'

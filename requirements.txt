@@ -5,3 +5,5 @@ astropy
 sympy
 arte
 astro-p3>=1.5.2
+
+# specula
