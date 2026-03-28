@@ -7,6 +7,8 @@ Created on Wed Nov 12 15:43:33 2025
 """
 # pylint: disable=C
 
+from dataclasses import dataclass, field
+
 import yaml
 import os
 import numpy as np
