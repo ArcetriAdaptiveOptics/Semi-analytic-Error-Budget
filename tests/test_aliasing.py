@@ -33,7 +33,8 @@ from src.Functions import (
     aliasing_variance,
     funct_d2,
     build_transfer_function,
-    compute_andes_optical_gain
+    compute_andes_optical_gain,
+    extract_propagation_coefficients
 )
 
 # ── P3 imports ───────────────────────────────────────────────────────────────
@@ -86,12 +87,6 @@ _N_MODES = 500              # Total modes to integrate in SA
 _FREQS_HZ = np.logspace(-3, np.log10(_FRAME_RATE / 2.0), 1000)
 _OMEGA = 2.0 * np.pi * _FREQS_HZ
 _T0 = 1.0 / _FRAME_RATE
-
-# Aliasing file
-_R_MATRIX = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES",
-                         "ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits")
-_SA_SLOPES = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES",
-                          "slopes_rms_time_avg_all.fits")
 
 @unittest.skipUnless(
     os.path.isfile(_P3_INI_8M) and os.path.isfile(_SA_OPT_GAIN_MOD0),
@@ -166,23 +161,20 @@ class TestAliasingVariance(unittest.TestCase):
             self.skipTest(f"Failed to compute SA optical gain: {e}")
 
         # 3. Compute SA Aliasing Variance
-        var_alias_sa_rad2, _, _, _ = aliasing_variance(
+        sa_alias_nm2, _, _, _ = aliasing_variance(
             transf_funct=H_n,
             actuators_number=_N_MODES,
             omega_temp_freq_interval=_OMEGA,
-            c_optg=1.0,  # We will apply the optical gain scaling after integration
+            c_optg=c_optg,
             alpha=_ALPHA,
             telescope_diameter=_D,
             seeing=seeing_arcsec,
             modulation_radius=_MODULATION_RADIUS,
             windspeed=_WIND_SPEED,
             maximum_radial_order_corrected=_MAX_RADIAL_ORDER,
-            file_path_matrix_R=_R_MATRIX,
-            file_path_sigma_slopes=_SA_SLOPES
+            file_path_matrix_R=_SA_RECONSTRUCTOR,
+            file_path_sigma_slopes=_SA_SIGMA_SLOPES
         )
-
-        # SA variance is in nm^2.
-        sa_alias_nm2 = float(var_alias_sa_rad2)
 
         if _VERBOSE:
             print("\n" + "="*60)
