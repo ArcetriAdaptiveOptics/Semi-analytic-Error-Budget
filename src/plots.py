@@ -18,7 +18,7 @@ from src.Functions import total_variance
 from src.Functions import compute_andes_optical_gain
 #from src.Functions import compute_soul_optical_gain
 from src.Functions import extract_propagation_coefficients
-from src.Functions import PSD_final_alias_meas
+from src.Functions import PSD_final_alias
 from src.Functions import double_interpolation_sigma_slope
 from src.Functions import read_sigma_slopes
 
@@ -527,10 +527,19 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
         
     print("ALIASING VARIANCE (OPEN LOOP):", sigma_alias_2_two_modes)
     
-    PSD_al = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
-                                   telescope_diameter, seeing, modulation_radius, wind_speed,
-                                   maximum_radial_order_corrected, "alias", reconstruction_matrix_path,
-                                   file_path_sigma_slopes=None)
+    PSD_al = PSD_final_alias(
+        c_optg,
+        actuators_number,
+        omega_temp_freq_interval,
+        alpha,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        wind_speed,
+        maximum_radial_order_corrected,
+        reconstruction_matrix_path,
+        file_path_sigma_slopes=None,
+    )
     
     integral_per_mode = integrate.simpson(PSD_al, omega_temp_freq_interval)
     sigma_alias_2_PSD_total = np.sum(integral_per_mode)
@@ -564,10 +573,19 @@ def plot_PSD_alias_mode_0(actuators_number, omega_temp_freq_interval, alpha, tel
         #    gain = compute_soul_optical_gain(file_optg, mod_modes, binning, magnitude)
         PSD_aliasing_mode0_given = mode_0 / (c_optg ** 2 * 2 * np.pi)             
         
-    PSD_alising_mine = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
-                                             telescope_diameter, seeing, modulation_radius, wind_speed,
-                                             maximum_radial_order_corrected, "alias", reconstruction_matrix_path,
-                                             sigma_slopes_path)
+    PSD_alising_mine = PSD_final_alias(
+        c_optg,
+        actuators_number,
+        omega_temp_freq_interval,
+        alpha,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        wind_speed,
+        maximum_radial_order_corrected,
+        reconstruction_matrix_path,
+        sigma_slopes_path,
+    )
     
     
     PSD_alising_mine_mode0 = PSD_alising_mine[0,:]

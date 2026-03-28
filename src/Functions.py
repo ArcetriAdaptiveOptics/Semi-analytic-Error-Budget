@@ -753,32 +753,42 @@ def PSD_aliasing_intermediate (actuators_number, omega_temp_freq_interval, alpha
     return PSD_alias_intermed 
 
 
-# Computes the final PSD (aliasing or measurement) by scaling the corresponding
-# intermediate PSD with the optical gain factor (1/c_optg^2).
+# Computes the final aliasing PSD by scaling the intermediate aliasing PSD
+# with the optical gain factor (1/c_optg^2).
 
-def PSD_final_alias_meas (c_optg, sigma2_w, actuators_number, omega_temp_freq_interval, alpha,  
-                          telescope_diameter, seeing, modulation_radius, windspeed,
-                          maximum_radial_order_corrected, term, file_path_matrix_R,
-                          file_path_sigma_slopes=None):
-    
-    if term == "alias" and sigma2_w is None:
-    
-       PSD_intermed = PSD_aliasing_intermediate (actuators_number, omega_temp_freq_interval, alpha,  
-                                                       telescope_diameter, seeing, modulation_radius, windspeed,
-                                                       maximum_radial_order_corrected, file_path_matrix_R,
-                                                       file_path_sigma_slopes)
-       
-    elif term == "meas" and sigma2_w is not None:
-       
-       PSD_intermed = compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, sigma2_w)
-    
-    else:
-        
-       raise ValueError("Invalid combination of 'term' and sigma2_w.")
-       
-    PSD_final = PSD_intermed / (c_optg**2)
-    
-    return PSD_final
+def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
+                    telescope_diameter, seeing, modulation_radius, windspeed,
+                    maximum_radial_order_corrected, file_path_matrix_R,
+                    file_path_sigma_slopes=None):
+
+    PSD_intermed = PSD_aliasing_intermediate(
+        actuators_number,
+        omega_temp_freq_interval,
+        alpha,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        windspeed,
+        maximum_radial_order_corrected,
+        file_path_matrix_R,
+        file_path_sigma_slopes,
+    )
+
+    return PSD_intermed / (c_optg**2)
+
+
+# Computes the final measurement-noise PSD by scaling the intermediate noise PSD
+# with the optical gain factor (1/c_optg^2).
+
+def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval):
+
+    PSD_intermed = compute_noise_PSD_intermediate(
+        omega_temp_freq_interval,
+        actuators_number,
+        sigma2_w,
+    )
+
+    return PSD_intermed / (c_optg**2)
   
 
 # Computes the aliasing variance by applying the transfer function to the aliasing PSD 
@@ -791,10 +801,19 @@ def aliasing_variance (transf_funct, actuators_number, omega_temp_freq_interval,
                        windspeed, maximum_radial_order_corrected, file_path_matrix_R,
                        file_path_sigma_slopes=None):
     
-    PSD_input = PSD_final_alias_meas (c_optg, None, actuators_number, omega_temp_freq_interval, alpha,  
-                                      telescope_diameter, seeing, modulation_radius, windspeed,
-                                      maximum_radial_order_corrected, "alias", file_path_matrix_R,
-                                      file_path_sigma_slopes)
+    PSD_input = PSD_final_alias(
+        c_optg,
+        actuators_number,
+        omega_temp_freq_interval,
+        alpha,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        windspeed,
+        maximum_radial_order_corrected,
+        file_path_matrix_R,
+        file_path_sigma_slopes,
+    )
     
     variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                         PSD_input, omega_temp_freq_interval)
@@ -897,10 +916,12 @@ def measure_variance (F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     sigma2_w = p_coefficient * slope_noise_variance
     
     
-    PSD_input = PSD_final_alias_meas (c_optg, sigma2_w, actuators_number, omega_temp_freq_interval, alpha,  
-                                      telescope_diameter, seeing, modulation_radius, windspeed,
-                                      maximum_radial_order_corrected, "meas", file_path_matrix_R,
-                                      file_path_sigma_slopes)
+    PSD_input = PSD_final_meas(
+        c_optg,
+        sigma2_w,
+        actuators_number,
+        omega_temp_freq_interval,
+    )
     
     variance_meas_OL, variance_meas_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
