@@ -732,25 +732,6 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
                 PSDaliasing[i, j] = k[i] * (omega_temp_freq_interval[j] ** alpha)
     
     return PSDaliasing  
-    
-
-# Function to compute the modal aliasing coefficients k and, then, to build the 
-# corresponding intermediate aliasing PSD.                   
-
-def PSD_aliasing_intermediate (actuators_number, omega_temp_freq_interval, alpha,  
-                               telescope_diameter, seeing, modulation_radius, windspeed,
-                               maximum_radial_order_corrected, file_path_matrix_R,
-                               file_path_sigma_slopes=None):
-    
-    k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
-                         omega_temp_freq_interval, file_path_matrix_R, windspeed,
-                         maximum_radial_order_corrected, file_path_sigma_slopes)
-    
-    PSD_alias_intermed = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
-                                                  k, alpha, telescope_diameter, windspeed, 
-                                                  maximum_radial_order_corrected)
-
-    return PSD_alias_intermed 
 
 
 # Computes the final aliasing PSD by scaling the intermediate aliasing PSD
@@ -761,18 +742,14 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
                     maximum_radial_order_corrected, file_path_matrix_R,
                     file_path_sigma_slopes=None):
 
-    PSD_intermed = PSD_aliasing_intermediate(
-        actuators_number,
-        omega_temp_freq_interval,
-        alpha,
-        telescope_diameter,
-        seeing,
-        modulation_radius,
-        windspeed,
-        maximum_radial_order_corrected,
-        file_path_matrix_R,
-        file_path_sigma_slopes,
-    )
+    # optical gain effects are applied in the next step, so this is an "intermediate" results
+    k = k_coeff_aliasing(modulation_radius, seeing, alpha, telescope_diameter,
+                         omega_temp_freq_interval, file_path_matrix_R, windspeed,
+                         maximum_radial_order_corrected, file_path_sigma_slopes)
+    
+    PSD_intermed = aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, 
+                                            k, alpha, telescope_diameter, windspeed, 
+                                            maximum_radial_order_corrected)
 
     return PSD_intermed / (c_optg**2)
 
@@ -782,6 +759,7 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval, alpha,
 
 def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval):
 
+    # optical gain effects are applied in the next step, so this is an "intermediate" results
     PSD_intermed = compute_noise_PSD_intermediate(
         omega_temp_freq_interval,
         actuators_number,
