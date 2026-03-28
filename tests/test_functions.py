@@ -245,11 +245,14 @@ class TestTotalVariance(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# funct_C
+# build_integrator_controller_polynomials
 # ---------------------------------------------------------------------------
 
-class TestFunctC(unittest.TestCase):
-    """funct_C builds the integral controller C = g*Z/(Z-1) in polynomial form."""
+class TestBuildIntegratorControllerPolynomials(unittest.TestCase):
+    """
+    build_integrator_controller_polynomials builds the integral controller
+    C = g*Z/(Z-1) in polynomial form.
+    """
 
     def test_numerator_polynomial_coefficients(self):
         # Numerator of g*Z/(Z-1) is g*Z: polynomial coefficients [g, 0]
@@ -296,19 +299,14 @@ class TestTransferFunct(unittest.TestCase):
     def test_H_n_equals_one_at_DC(self):
         # Integral control has unity DC gain on the noise path
         plant_num, num_int, plant_den, den_int, Z = self._dc_inputs(gain=0.5)
-        H_n = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_n")
+        _, H_n = transfer_funct(plant_num, num_int, plant_den, den_int, Z)
         self.assertAlmostEqual(abs(H_n[0]), 1.0, places=6)
 
     def test_H_r_equals_zero_at_DC(self):
         # Integral control perfectly rejects a DC disturbance
         plant_num, num_int, plant_den, den_int, Z = self._dc_inputs(gain=0.5)
-        H_r = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_r")
+        H_r, _ = transfer_funct(plant_num, num_int, plant_den, den_int, Z)
         self.assertAlmostEqual(abs(H_r[0]), 0.0, places=6)
-
-    def test_invalid_type_raises_ValueError(self):
-        plant_num, num_int, plant_den, den_int, Z = self._dc_inputs()
-        with self.assertRaises(ValueError):
-            transfer_funct(plant_num, num_int, plant_den, den_int, Z, "bad_type")
 
     def test_output_length_matches_frequency_vector(self):
         n_freq = 50
@@ -317,7 +315,7 @@ class TestTransferFunct(unittest.TestCase):
         Z = np.exp(1j * omega * 0.001)
         plant_num = np.array([1.0])
         plant_den = funct_d2(1)
-        H_r = transfer_funct(plant_num, num_int, plant_den, den_int, Z, "H_r")
+        H_r, _ = transfer_funct(plant_num, num_int, plant_den, den_int, Z)
         self.assertEqual(len(H_r), n_freq)
 
 

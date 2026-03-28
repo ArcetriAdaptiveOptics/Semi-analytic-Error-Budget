@@ -38,11 +38,8 @@ class TestControllerPolynomialTransferFunction(unittest.TestCase):
         controller_num = np.array([0.35, 0.0])
         controller_den = np.array([1.0, -1.0])
 
-        H_r_iir = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den, omega, t_0, 1, plant_num, plant_den, "H_r"
-        )
-        H_n_iir = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den, omega, t_0, 1, plant_num, plant_den, "H_n"
+        H_r_iir, H_n_iir = build_transfer_function_from_controller_polynomials(
+            controller_num, controller_den, omega, t_0, 1, plant_num, plant_den
         )
 
         np.testing.assert_allclose(H_r_gain, H_r_iir, rtol=1e-12, atol=1e-12)

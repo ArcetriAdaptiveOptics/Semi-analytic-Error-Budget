@@ -78,6 +78,7 @@ def funct_d2 (T_total):
 
 # Function that returns the numerator and denominator of the integrator controller C = g*Z/(Z-1)
 # expressed as polynomials in Z (descending powers, np.polyval convention).
+# Note: Formerly named funct_C, renamed to build_integrator_controller_polynomials for clarity.
 
 def build_integrator_controller_polynomials(gain):
 
@@ -90,11 +91,6 @@ def build_integrator_controller_polynomials(gain):
     den_int = np.array(sp.Poly(den, Z_symbolic).all_coeffs(), dtype=complex)
 
     return num_int, den_int
-
-
-def funct_C(gain, omega_temp_freq_interval=None, t_0=None):
-    """Backward-compatible alias for build_integrator_controller_polynomials."""
-    return build_integrator_controller_polynomials(gain)
   
   
 # Function to compute the numerator and denominator polynomials of the transfer functions H_r and H_n
@@ -104,8 +100,8 @@ def funct_C(gain, omega_temp_freq_interval=None, t_0=None):
 # The plant (WFS * Reconstructor+Delay * DM) is represented by its pre-multiplied polynomials
 # plant_num and plant_den.  The controller for a single mode is controller_num / controller_den.
 
-def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z, transfer_function_type):
-    """Evaluate H_r or H_n for a single mode.
+def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z):
+    """Evaluate both H_r and H_n for a single mode.
 
     Parameters
     ----------
@@ -119,8 +115,10 @@ def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z, tran
         Controller denominator polynomial for this mode.
     Z : array_like
         Complex frequency vector.
-    transfer_function_type : str
-        ``'H_r'`` (rejection) or ``'H_n'`` (noise/aliasing).
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(H_r, H_n)`` evaluated over ``Z``.
     """
     H_r_coeff_num = np.polymul(plant_den, controller_den)
     H_r_coeff_den = np.polyadd(
@@ -135,13 +133,10 @@ def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z, tran
     H_n_num = np.polyval(H_n_coeff_num, Z)
     H_n_den = np.polyval(H_n_coeff_den, Z)
 
-    if transfer_function_type == "H_r":
-        return H_r_num / H_r_den
+    H_r = H_r_num / H_r_den
+    H_n = H_n_num / H_n_den
 
-    if transfer_function_type == "H_n":
-        return H_n_num / H_n_den
-
-    raise ValueError("Transfer_function_type must be one of 'H_r' or 'H_n'")
+    return H_r, H_n
         
         
 # Function to compute the controller (num_int, den_int) polynomial arrays for all modes using an integrator.
@@ -159,24 +154,23 @@ def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
     return num_int_array, den_int_array
   
 
-# Function to compute the transfer function H for all modes.
-# The 'transfer_function_type' argument selects between two different types of transfer functions: "H_r" or "H_n".
+# Function to compute both transfer functions H_r and H_n for all modes.
 
-def compute_H(actuators_number, omega_temp_freq_interval, plant_num, controller_num_matrix, plant_den, controller_den_matrix, Z, transfer_function_type):
+def compute_H(actuators_number, omega_temp_freq_interval, plant_num, controller_num_matrix, plant_den, controller_den_matrix, Z):
 
-    H = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
+    H_r = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
+    H_n = np.zeros((actuators_number, len(omega_temp_freq_interval)), dtype=complex)
 
     for i in range(actuators_number):
-        H[i, :] = transfer_funct(
+        H_r[i, :], H_n[i, :] = transfer_funct(
             plant_num,
             controller_num_matrix[i, :],
             plant_den,
             controller_den_matrix[i, :],
             Z,
-            transfer_function_type,
         )
 
-    return H
+    return H_r, H_n
 
 
 def _as_controller_coefficient_matrix(coefficients, actuators_number, coefficient_name):
@@ -208,8 +202,7 @@ def _as_controller_coefficient_matrix(coefficients, actuators_number, coefficien
 
 def build_transfer_function_from_controller_polynomials(controller_num, controller_den,
                                                         omega_temp_freq_interval, t_0,
-                                                        actuators_number, plant_num, plant_den,
-                                                        transfer_function_type):
+                                                        actuators_number, plant_num, plant_den):
     """
     Build the closed-loop transfer function using explicit controller polynomials.
 
@@ -231,8 +224,10 @@ def build_transfer_function_from_controller_polynomials(controller_num, controll
         Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
     plant_den : array_like
         Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
-    transfer_function_type : str
-        ``'H_r'`` or ``'H_n'``.
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        ``(H_r, H_n)`` matrices of shape ``(N_modes, N_freq)``.
     """
     controller_num_matrix = _as_controller_coefficient_matrix(
         controller_num, actuators_number, "controller_num"
@@ -246,8 +241,15 @@ def build_transfer_function_from_controller_polynomials(controller_num, controll
 
     Z = np.exp(1j * np.asarray(omega_temp_freq_interval) * t_0)
 
-    return compute_H(actuators_number, omega_temp_freq_interval,
-                     plant_num, controller_num_matrix, plant_den, controller_den_matrix, Z, transfer_function_type)
+    return compute_H(
+        actuators_number,
+        omega_temp_freq_interval,
+        plant_num,
+        controller_num_matrix,
+        plant_den,
+        controller_den_matrix,
+        Z,
+    )
 
 
 # Function to compute the transfer function H.
@@ -291,17 +293,15 @@ def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
             "'controller_num' and 'controller_den'"
         )
 
-    H_r = build_transfer_function_from_controller_polynomials(
-        ctrl_num, ctrl_den, omega_temp_freq_interval, t_0, actuators_number,
-        plant_num, plant_den, "H_r"
+    return build_transfer_function_from_controller_polynomials(
+        ctrl_num,
+        ctrl_den,
+        omega_temp_freq_interval,
+        t_0,
+        actuators_number,
+        plant_num,
+        plant_den,
     )
-
-    H_n = build_transfer_function_from_controller_polynomials(
-        ctrl_num, ctrl_den, omega_temp_freq_interval, t_0, actuators_number,
-        plant_num, plant_den, "H_n"
-    )
-
-    return H_r, H_n
     
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
@@ -1073,17 +1073,16 @@ class SingleModeControllerOptimizationContext:
     history: list = field(default_factory=list)
 
     def evaluate(self, controller_num, controller_den, store_history=True):
-        H_r = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den,
-            self.omega_temp_freq_interval, self.t_0,
-            1, self.num1, self.num2, self.num3, self.den1, self.den2, self.den3,
-            "H_r"
-        )
-        H_n = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den,
-            self.omega_temp_freq_interval, self.t_0,
-            1, self.num1, self.num2, self.num3, self.den1, self.den2, self.den3,
-            "H_n"
+        plant_num = np.polymul(np.polymul(np.asarray(self.num1), np.asarray(self.num2)), np.asarray(self.num3))
+        plant_den = np.polymul(np.polymul(np.asarray(self.den1), np.asarray(self.den2)), np.asarray(self.den3))
+        H_r, H_n = build_transfer_function_from_controller_polynomials(
+            controller_num,
+            controller_den,
+            self.omega_temp_freq_interval,
+            self.t_0,
+            1,
+            plant_num,
+            plant_den,
         )
 
         PSD_output_atmos = func_out(H_r[0, :], self.PSD_input_atmos[0, :])[np.newaxis, :]

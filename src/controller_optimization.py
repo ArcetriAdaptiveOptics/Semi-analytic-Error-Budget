@@ -37,6 +37,8 @@ from src.Functions import (
 # Result types
 # ---------------------------------------------------------------------------
 
+
+# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationRecord:
     """Lightweight history entry stored after each :meth:`SingleModeControllerOptimizationContext.evaluate` call."""
@@ -46,6 +48,7 @@ class SingleModeControllerOptimizationRecord:
     variance_terms: dict
 
 
+# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationResult:
     """Full result returned by :meth:`SingleModeControllerOptimizationContext.evaluate`."""
@@ -62,6 +65,7 @@ class SingleModeControllerOptimizationResult:
 # Context
 # ---------------------------------------------------------------------------
 
+# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationContext:
     """Pre-computed context for single-mode IIR controller optimization.
@@ -82,8 +86,6 @@ class SingleModeControllerOptimizationContext:
         Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
     plant_den : np.ndarray
         Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
-    static_fit_variance : float
-        Fitting variance contribution [nm²] (not updated during optimization).
     PSD_input_atmos : np.ndarray, shape (1, n_freq)
         Atmospheric turbulence PSD for the selected mode.
     PSD_input_vibration : np.ndarray, shape (1, n_freq)
@@ -100,14 +102,13 @@ class SingleModeControllerOptimizationContext:
     t_0: float
     plant_num: np.ndarray
     plant_den: np.ndarray
-    static_fit_variance: float
     PSD_input_atmos: np.ndarray
     PSD_input_vibration: np.ndarray
     PSD_input_alias: np.ndarray
     PSD_input_measurement: np.ndarray
     history: list = field(default_factory=list)
 
-    def evaluate(self, controller_num, controller_den, store_history=True):
+    def evaluate(self, controller_num, controller_den, store_history=False):
         """Evaluate the total variance for a given IIR controller.
 
         Parameters
@@ -117,21 +118,23 @@ class SingleModeControllerOptimizationContext:
         controller_den : array_like
             Denominator polynomial coefficients (descending powers of Z).
         store_history : bool, optional
-            If ``True`` (default), append a record to ``self.history``.
+            If ``True``, append a record to ``self.history``.
+            It is useful to keep track of the optimization trajectory,
+            but it can grow indefinitely. 
+            Use with ``store_history=False`` for a fixed memory footprint.
 
         Returns
         -------
         SingleModeControllerOptimizationResult
         """
-        H_r = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den,
-            self.omega_temp_freq_interval, self.t_0,
-            1, self.plant_num, self.plant_den, "H_r",
-        )
-        H_n = build_transfer_function_from_controller_polynomials(
-            controller_num, controller_den,
-            self.omega_temp_freq_interval, self.t_0,
-            1, self.plant_num, self.plant_den, "H_n",
+        H_r, H_n = build_transfer_function_from_controller_polynomials(
+            controller_num,
+            controller_den,
+            self.omega_temp_freq_interval,
+            self.t_0,
+            1,
+            self.plant_num,
+            self.plant_den,
         )
 
         PSD_output_atmos = func_out(H_r[0, :], self.PSD_input_atmos[0, :])[np.newaxis, :]
@@ -146,10 +149,11 @@ class SingleModeControllerOptimizationContext:
         var_temp_total = var_temp_atmos + var_temp_vibration
         var_alias = integrate_function(PSD_output_alias[0, :], self.omega_temp_freq_interval)
         var_measurement = integrate_function(PSD_output_measurement[0, :], self.omega_temp_freq_interval)
-        cost = total_variance(self.static_fit_variance, var_temp_total, var_alias, var_measurement)
+        # Note: No static fitting variance term is included here, because it is independent of the controller
+        #       and does not affect the optimization trajectory.
+        cost = total_variance(0.0, var_temp_total, var_alias, var_measurement)
 
         variance_terms = {
-            "fitting": float(np.real(self.static_fit_variance)),
             "temporal_atmosphere": float(np.real(var_temp_atmos)),
             "temporal_vibration": float(np.real(var_temp_vibration)),
             "temporal": float(np.real(var_temp_total)),
@@ -259,7 +263,6 @@ def prepare_single_mode_control_optimization(
     collecting_area,
     file_path_matrix_R,
     file_path_sigma_slopes=None,
-    static_fit_variance=0.0,
     plant_num=None,
     plant_den=None,
 ):
@@ -269,8 +272,7 @@ def prepare_single_mode_control_optimization(
 
     * temporal input PSDs (atmosphere and vibration),
     * aliasing input PSD,
-    * measurement input PSD,
-    * static cost contribution (e.g. fitting variance).
+    * measurement input PSD.
 
     The returned context can then evaluate many controller candidates cheaply,
     updating only H_r, H_n and the resulting cost.
@@ -321,8 +323,6 @@ def prepare_single_mode_control_optimization(
         Path to reconstruction-matrix FITS file.
     file_path_sigma_slopes : str, optional
         Path to sigma-slopes FITS file (uses default if ``None``).
-    static_fit_variance : float, optional
-        Fitting variance [nm²] to add as a constant cost term (default 0).
     plant_num : array_like, optional
         Pre-multiplied plant numerator (e.g. ``n1 * n2 * n3``).
         Defaults to ``[1.0]``.
@@ -407,7 +407,6 @@ def prepare_single_mode_control_optimization(
         t_0=float(t_0),
         plant_num=np.asarray(plant_num, dtype=float),
         plant_den=np.asarray(plant_den, dtype=float),
-        static_fit_variance=float(np.real(static_fit_variance)),
         PSD_input_atmos=PSD_input_atmos,
         PSD_input_vibration=PSD_input_vibration,
         PSD_input_alias=PSD_input_alias,
