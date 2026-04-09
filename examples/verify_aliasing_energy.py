@@ -2,18 +2,18 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy import integrate
 from astropy.io import fits
 
 from src.Functions import (
+    DEFAULT_ALIASING_ALPHA,
+    PSD_final_alias,
     compute_andes_optical_gain,
-    PSD_aliasing,
     load_parameters,
     read_sigma_slopes,
     double_interpolation_sigma_slope,
     extract_propagation_coefficients,
-    radial_order_from_n_modes
+    radial_order_from_n_modes,
 )
 
 def verify_aliasing_energy():
@@ -27,7 +27,7 @@ def verify_aliasing_energy():
     D = param['telescope']['telescope_diam']
     seeing = param['atmosphere']['seeing']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
-    alpha = -17 / 3
+    alpha = DEFAULT_ALIASING_ALPHA
     n_actuators = param['control']['n_modes']
     wind_speed = param['atmosphere']['wind_speed']
     max_rad_ord = radial_order_from_n_modes(n_actuators)
@@ -43,7 +43,13 @@ def verify_aliasing_energy():
     omega_sa = 2 * np.pi * temporal_freqs
 
     # 2. Compute Optical Gain
-    c_optg = compute_andes_optical_gain(file_mod0, file_mod4, seeing, modulation_radius)
+    c_optg = compute_andes_optical_gain(
+        file_mod0,
+        file_mod4,
+        seeing,
+        modulation_radius,
+        actuators_number=n_actuators,
+    )
 
     # --------------------------------------------------------------------------------
     # METHOD 1: Direct target variance
@@ -57,17 +63,28 @@ def verify_aliasing_energy():
         modulation_radius, seeing
     )
 
-    p_coeff = extract_propagation_coefficients(file_reconstructor)
-    p_coeff = np.squeeze(p_coeff)
+    p_coeff = np.asarray(extract_propagation_coefficients(file_reconstructor), dtype=float).ravel()
+    n_modes = min(n_actuators, p_coeff.size, c_optg.shape[0])
+    p_coeff = p_coeff[:n_modes]
+    c_optg_modes = np.squeeze(c_optg[:n_modes])
 
-    var_from_slopes = (sigma_slope_alias**2) * (c_optg**2) * p_coeff
+    var_from_slopes = (sigma_slope_alias ** 2) * p_coeff / (c_optg_modes ** 2)
 
     # --------------------------------------------------------------------------------
     # METHOD 2: Numerical integral of SA PSD
     # --------------------------------------------------------------------------------
-    psd_sa = PSD_aliasing(
-        n_actuators, omega_sa, alpha, D, seeing, modulation_radius, 
-        wind_speed, max_rad_ord, file_reconstructor, c_optg, file_sigma_slopes
+    psd_sa = PSD_final_alias(
+        c_optg=c_optg,
+        actuators_number=n_modes,
+        omega_temp_freq_interval=omega_sa,
+        alpha=alpha,
+        telescope_diameter=D,
+        seeing=seeing,
+        modulation_radius=modulation_radius,
+        windspeed=wind_speed,
+        maximum_radial_order_corrected=max_rad_ord,
+        file_path_matrix_R=file_reconstructor,
+        file_path_sigma_slopes=file_sigma_slopes,
     )
     var_from_psd = integrate.simpson(psd_sa, omega_sa, axis=-1)
 
@@ -104,9 +121,19 @@ def verify_aliasing_energy():
         print(f"{i:<6} | {var_from_slopes[i]:<22.4e} | {var_from_psd[i]:<22.4e} | {pass_val:<22}")
 
     print("-" * 80)
+    sum_slopes = float(np.sum(var_from_slopes))
+    sum_psd = float(np.sum(var_from_psd))
     sum_passata = f"{np.sum(var_passata):.4e}" if passata_available else "N/A"
-    print(f"{'TOTAL':<6} | {np.sum(var_from_slopes):<22.4e} | {np.sum(var_from_psd):<22.4e}"
+    print(f"{'TOTAL':<6} | {sum_slopes:<22.4e} | {sum_psd:<22.4e}"
           f" | {sum_passata:<22}\n")
+
+    return {
+        "n_modes": int(n_modes),
+        "var_from_slopes_total": sum_slopes,
+        "var_from_psd_total": sum_psd,
+        "passata_available": bool(passata_available),
+    }
+
 
 if __name__ == "__main__":
     verify_aliasing_energy()

@@ -12,12 +12,15 @@ or:
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 from scipy import integrate as scipy_integrate
 
 from src.Functions import (
+    DEFAULT_ALIASING_ALPHA,
     _load_andes_gain_grid,
+    aliasing_psd_from_coeffs,
     build_integrator_controller_polynomials,
     compute_k_prime,
     compute_noise_PSD_intermediate,
@@ -31,6 +34,7 @@ from src.Functions import (
     load_parameters,
     load_PSD_windshake,
     omega_0,
+    PSD_final_alias,
     read_sigma_slopes,
     resize_psd_like,
     total_variance,
@@ -458,6 +462,70 @@ class TestComputeKPrime(unittest.TestCase):
             + (om_max ** (alpha + 1) - w0 ** (alpha + 1)) / (alpha + 1)
         )
         return sigma_slope ** 2 / (c ** 2 * integral)
+
+
+class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
+    """Regression tests for aliasing defaults and optical-gain broadcasting."""
+
+    @staticmethod
+    def _formula(omega, alpha, sigma_slope, c, D, v, N):
+        w0      = 2 * np.pi * (N + 1) * v / D
+        om_min  = np.min(omega)
+        om_max  = np.max(omega)
+        integral = (
+            w0 ** alpha * (w0 - om_min)
+            + (om_max ** (alpha + 1) - w0 ** (alpha + 1)) / (alpha + 1)
+        )
+        return sigma_slope ** 2 / (c ** 2 * integral)
+
+    @patch("src.Functions.k_coeff_aliasing", return_value=np.array([1.0]))
+    def test_psd_final_alias_defaults_alpha_to_minus_17_over_3(self, mock_k):
+        omega = np.array([1.0, 2.0, 4.0])
+
+        PSD_final_alias(
+            c_optg=2.0,
+            actuators_number=1,
+            omega_temp_freq_interval=omega,
+            telescope_diameter=8.0,
+            seeing=0.8,
+            modulation_radius=3.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+            file_path_matrix_R="dummy.fits",
+        )
+
+        self.assertEqual(mock_k.call_args.kwargs["alpha"], DEFAULT_ALIASING_ALPHA)
+
+    @patch("src.Functions.k_coeff_aliasing", return_value=np.array([1.0, 4.0]))
+    def test_psd_final_alias_accepts_row_vector_optical_gain(self, mock_k):
+        omega = np.array([1.0, 2.0, 4.0])
+        c_optg = np.array([[2.0, 4.0, 8.0, 16.0]])
+
+        result = PSD_final_alias(
+            c_optg=c_optg,
+            actuators_number=2,
+            omega_temp_freq_interval=omega,
+            telescope_diameter=8.0,
+            seeing=0.8,
+            modulation_radius=3.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+            file_path_matrix_R="dummy.fits",
+            alpha=-1.0,
+        )
+
+        expected = aliasing_psd_from_coeffs(
+            2,
+            omega,
+            np.array([1.0, 4.0]),
+            alpha=-1.0,
+            telescope_diameter=8.0,
+            windspeed=10.0,
+            maximum_radial_order_corrected=5,
+        ) / np.array([[2.0], [4.0]]) ** 2
+
+        np.testing.assert_allclose(result, expected)
+        mock_k.assert_called_once()
 
     def test_matches_analytical_formula(self):
         omega = np.logspace(0, 3, 500)   # 1 … 1000 rad/s

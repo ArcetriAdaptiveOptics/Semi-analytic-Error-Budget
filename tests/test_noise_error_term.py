@@ -104,6 +104,11 @@ _omega = 2.0 * np.pi * _temporal_freqs
 _T0 = 1.0 / _FRAME_RATE
 
 
+def _as_scalar(value):
+    """Convert a scalar-like array to a Python float without deprecation warnings."""
+    return float(np.asarray(value).reshape(-1)[0])
+
+
 # ── SA helper: noise WFE in nm OPD ──────────────────────────────────────────
 
 def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay):
@@ -311,14 +316,14 @@ class TestP3NoisePSD(unittest.TestCase):
 
     def test_noise_wfe_is_positive(self):
         """Noise WFE from the error breakdown must be strictly positive."""
-        self.assertGreater(float(self.fao.wfeN), 0.0)
+        self.assertGreater(_as_scalar(self.fao.wfeN), 0.0)
 
     def test_noise_wfe_in_physically_plausible_range_nm(self):
         """
         For 1000 ph/sub/frame the noise WFE should be between 1 and 500 nm
         OPD (rough physical bounds for an 8 m Pyramid AO system).
         """
-        wfe = float(self.fao.wfeN)
+        wfe = _as_scalar(self.fao.wfeN)
         self.assertGreater(wfe,   1.0, msg=f"wfeN = {wfe:.2f} nm is implausibly small")
         self.assertLess   (wfe, 500.0, msg=f"wfeN = {wfe:.2f} nm is implausibly large")
 
@@ -331,7 +336,7 @@ class TestP3NoisePSD(unittest.TestCase):
         rad2nm = dk * self.fao.freq.wvlRef * 1e9 / (2.0 * np.pi)
         wfe_recomputed = float(np.sqrt(self.fao.psdNoise.sum())) * rad2nm
         np.testing.assert_allclose(
-            wfe_recomputed, float(self.fao.wfeN), rtol=1e-10,
+            wfe_recomputed, _as_scalar(self.fao.wfeN), rtol=1e-10,
         )
 
     def test_psd_scales_linearly_with_noisevar(self):
@@ -343,7 +348,7 @@ class TestP3NoisePSD(unittest.TestCase):
         noisevar_original = list(self.fao.ao.wfs.processing.noiseVar)
         try:
             noisevar_ref = float(noisevar_original[0])
-            wfe_ref      = float(self.fao.wfeN)
+            wfe_ref      = _as_scalar(self.fao.wfeN)
 
             # Apply 4x photon scaling (noiseVar → noiseVar/4)
             self.fao.ao.wfs.processing.noiseVar = [noisevar_ref / 4.0]
@@ -466,7 +471,7 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
         P3 and SA noise WFE (nm OPD) must agree within a factor of 10 for
         comparable 8 m Pyramid system parameters.
         """
-        wfe_p3 = float(self.fao.wfeN)   # nm OPD, from P3 error breakdown
+        wfe_p3 = _as_scalar(self.fao.wfeN)   # nm OPD, from P3 error breakdown
         wfe_sa = _sa_wfe_nm(
             _N_MODES, _NPH, 0.0, self.p_coeff,
             _omega, _T0, _GAIN, _DELAY,
@@ -496,7 +501,7 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
             dk     = 2.0 * self.fao.freq.kcMax_ / self.fao.freq.resAO
             rad2nm = dk * self.fao.freq.wvlRef * 1e9 / (2.0 * np.pi)
             wfe_p3_hi  = float(np.sqrt(psd_hi.sum())) * rad2nm
-            wfe_p3_ref = float(self.fao.wfeN)
+            wfe_p3_ref = _as_scalar(self.fao.wfeN)
             ratio_p3 = wfe_p3_ref / wfe_p3_hi
         finally:
             self.fao.ao.wfs.processing.noiseVar = noisevar_original

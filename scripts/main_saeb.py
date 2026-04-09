@@ -213,7 +213,13 @@ def run(yaml_file):
 
     c_optg = 0
     if system == "ANDES":
-        c_optg = compute_andes_optical_gain(file_optg[0], file_optg[1], seeing_, modulation_radius)
+        c_optg = compute_andes_optical_gain(
+            file_optg[0],
+            file_optg[1],
+            seeing_,
+            modulation_radius,
+            actuators_number=n_actuators,
+        )
 
     plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
     plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
@@ -249,20 +255,39 @@ def run(yaml_file):
     _, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance(PSD_wind_for_calc, H_r_temp,
                                                                     n_actuators, omega_temporal_freqs)
 
-    _, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(H_n_alias, n_actuators, omega_temporal_freqs,
-                                                                     c_optg, alpha_, telescope_diameter, seeing_,
-                                                                     modulation_radius, wind_speed,
-                                                                     maximum_rad_order_corr, file_path_R1,
-                                                                     file_sigma_slope)
+    _, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(
+        transf_funct=H_n_alias,
+        actuators_number=n_actuators,
+        omega_temp_freq_interval=omega_temporal_freqs,
+        c_optg=c_optg,
+        alpha=alpha_,
+        telescope_diameter=telescope_diameter,
+        seeing=seeing_,
+        modulation_radius=modulation_radius,
+        windspeed=wind_speed,
+        maximum_radial_order_corrected=maximum_rad_order_corr,
+        file_path_matrix_R=file_path_R1,
+        file_path_sigma_slopes=file_sigma_slope,
+    )
 
-    _, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(F_excess_noise, x_pixel, sky_background,
-                                                                 dark_current, readout_noise, phot_flux,
-                                                                 telescope_diameter, frame_rate, magnitudo,
-                                                                 n_subapert, collecting_area, file_path_R1,
-                                                                 omega_temporal_freqs, H_n_meas, n_actuators,
-                                                                 c_optg, alpha_, maximum_rad_order_corr,
-                                                                 seeing_, modulation_radius, wind_speed,
-                                                                 file_sigma_slope)
+    _, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
+        F_excess_noise,
+        x_pixel,
+        sky_background,
+        dark_current,
+        readout_noise,
+        phot_flux,
+        telescope_diameter,
+        frame_rate,
+        magnitudo,
+        n_subapert,
+        collecting_area,
+        file_path_R1,
+        H_n_meas,
+        n_actuators,
+        omega_temporal_freqs,
+        c_optg,
+    )
 
     total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 
