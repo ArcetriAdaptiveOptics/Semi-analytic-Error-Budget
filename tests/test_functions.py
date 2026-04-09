@@ -533,13 +533,16 @@ class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
         D, v, N = 38.5, 8.0, 88
         expected = self._formula(omega, alpha, sigma, c, D, v, N)
         self.assertAlmostEqual(
-            compute_k_prime(omega, alpha, sigma, D, v, N)/c**2, expected, places=10
+            compute_k_prime(omega, sigma, D, v, N, alpha=alpha) / c**2,
+            expected,
+            places=10,
         )
 
     def test_result_is_positive(self):
         omega = np.logspace(0, 3, 200)
         self.assertGreater(
-            compute_k_prime(omega, -17 / 3, 0.01, 38.5, 8.0, 88), 0
+            compute_k_prime(omega, 0.01, 38.5, 8.0, 88, alpha=-17 / 3),
+            0,
         )
 
 

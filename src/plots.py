@@ -550,13 +550,13 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, modulation_rad
         c_optg,
         actuators_number,
         omega_temp_freq_interval,
-        alpha,
         telescope_diameter,
         seeing,
         modulation_radius,
         wind_speed,
         maximum_radial_order_corrected,
         reconstruction_matrix_path,
+        alpha=alpha,
         file_path_sigma_slopes=None,
     )
     
@@ -600,14 +600,14 @@ def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, te
         c_optg,
         actuators_number,
         omega_temp_freq_interval,
-        alpha,
         telescope_diameter,
         seeing,
         modulation_radius,
         wind_speed,
         maximum_radial_order_corrected,
         reconstruction_matrix_path,
-        sigma_slopes_path,
+        alpha=alpha,
+        file_path_sigma_slopes=sigma_slopes_path,
     )
     
     

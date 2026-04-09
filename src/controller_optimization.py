@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from src.Functions import (
+    DEFAULT_ALIASING_ALPHA,
     aliasing_psd_from_coeffs,
     build_transfer_function_from_controller_polynomials,
     compute_noise_PSD_intermediate,
@@ -38,7 +39,6 @@ from src.Functions import (
 # ---------------------------------------------------------------------------
 
 
-# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationRecord:
     """Lightweight history entry stored after each :meth:`SingleModeControllerOptimizationContext.evaluate` call."""
@@ -48,7 +48,6 @@ class SingleModeControllerOptimizationRecord:
     variance_terms: dict
 
 
-# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationResult:
     """Full result returned by :meth:`SingleModeControllerOptimizationContext.evaluate`."""
@@ -65,7 +64,6 @@ class SingleModeControllerOptimizationResult:
 # Context
 # ---------------------------------------------------------------------------
 
-# @dataclass automatically generates the constructor (__init__) for classes that act as simple data containers.
 @dataclass
 class SingleModeControllerOptimizationContext:
     """Pre-computed context for single-mode IIR controller optimization.
@@ -149,8 +147,8 @@ class SingleModeControllerOptimizationContext:
         var_temp_total = var_temp_atmos + var_temp_vibration
         var_alias = integrate_function(PSD_output_alias[0, :], self.omega_temp_freq_interval)
         var_measurement = integrate_function(PSD_output_measurement[0, :], self.omega_temp_freq_interval)
-        # Note: No static fitting variance term is included here, because it is independent of the controller
-        #       and does not affect the optimization trajectory.
+        # No static fitting variance term is included here because it is
+        # independent of the controller and does not affect the trajectory.
         cost = total_variance(0.0, var_temp_total, var_alias, var_measurement)
 
         variance_terms = {
@@ -244,7 +242,6 @@ def prepare_single_mode_control_optimization(
     t_0,
     PSD_atmo_turb,
     PSD_vibration,
-    alpha,
     telescope_diameter,
     seeing,
     modulation_radius,
@@ -262,6 +259,7 @@ def prepare_single_mode_control_optimization(
     n_subaperture,
     collecting_area,
     file_path_matrix_R,
+    alpha=DEFAULT_ALIASING_ALPHA,
     file_path_sigma_slopes=None,
     plant_num=None,
     plant_den=None,
@@ -289,8 +287,6 @@ def prepare_single_mode_control_optimization(
         Atmospheric turbulence PSD.
     PSD_vibration : np.ndarray, shape (n_modes_vib, n_freq)
         Vibration PSD (can have fewer modes than ``PSD_atmo_turb``).
-    alpha : float
-        Spectral index for the aliasing model.
     telescope_diameter : float
         Telescope diameter [m].
     seeing : float
@@ -321,6 +317,9 @@ def prepare_single_mode_control_optimization(
         Telescope collecting area [m²].
     file_path_matrix_R : str
         Path to reconstruction-matrix FITS file.
+    alpha : float, optional
+        Spectral index for the aliasing model.
+        Defaults to ``DEFAULT_ALIASING_ALPHA``.
     file_path_sigma_slopes : str, optional
         Path to sigma-slopes FITS file (uses default if ``None``).
     plant_num : array_like, optional
@@ -361,9 +360,15 @@ def prepare_single_mode_control_optimization(
 
     k_alias = np.asarray(
         k_coeff_aliasing(
-            modulation_radius, seeing, alpha, telescope_diameter,
-            omega_temp_freq_interval, file_path_matrix_R, windspeed,
-            maximum_radial_order_corrected, file_path_sigma_slopes,
+            modulation_radius,
+            seeing,
+            telescope_diameter,
+            omega_temp_freq_interval,
+            file_path_matrix_R,
+            windspeed,
+            maximum_radial_order_corrected,
+            alpha=alpha,
+            file_path_sigma_slopes=file_path_sigma_slopes,
         ),
         dtype=float,
     )
@@ -375,9 +380,13 @@ def prepare_single_mode_control_optimization(
         )
 
     PSD_input_alias = aliasing_psd_from_coeffs(
-        1, omega_temp_freq_interval,
+        1,
+        omega_temp_freq_interval,
         np.array([k_alias[mode_index]], dtype=float),
-        alpha, telescope_diameter, windspeed, maximum_radial_order_corrected,
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
     ) / (c_optg ** 2)
 
     slope_noise_variance = compute_slope_noise_variance(

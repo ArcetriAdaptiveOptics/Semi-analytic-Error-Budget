@@ -87,7 +87,13 @@ class TestPrepareSingleModeControlOptimization(unittest.TestCase):
         )
 
         expected_alias = aliasing_psd_from_coeffs(
-            1, omega, np.array([4.0]), -1.0, 8.0, 10.0, 5
+            1,
+            omega,
+            np.array([4.0]),
+            8.0,
+            10.0,
+            5,
+            alpha=-1.0,
         ) / (2.0 ** 2)
         expected_measurement = compute_noise_PSD_intermediate(
             omega, 1, np.array([20.0 * 0.5])

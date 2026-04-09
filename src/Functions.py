@@ -70,8 +70,8 @@ def radial_order_from_n_modes(n_modes):
 
 # Function to define the d2 array, whose length depends on the value of T_total.
 
-def funct_d2 (T_total):
-    
+def funct_d2(T_total):
+
     d2 = np.zeros(T_total + 1)
     d2[0] = 1
     
@@ -483,8 +483,13 @@ def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp
 # See Equation (8) (in "Semianalytical error budget for adaptive optics systems with pyramid wavefront sensors", 
 # Agapito and Pinna, 2019)
 
-def temporal_variance (PSD_atmo_turb, PSD_vibration, transf_funct, actuators_number, 
-                       omega_temp_freq_interval): 
+def temporal_variance(
+    PSD_atmo_turb,
+    PSD_vibration,
+    transf_funct,
+    actuators_number,
+    omega_temp_freq_interval,
+):
 
     PSD_atmo = align_psd_modes(PSD_atmo_turb, actuators_number)
     PSD_vib_aligned = align_psd_modes(PSD_vibration, actuators_number)
@@ -694,14 +699,6 @@ def double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes
     return sigma_slope_aliasing
 
 
-def _require_parameters(**kwargs):
-    """Raise a clear error when required parameters are omitted."""
-    missing = [name for name, value in kwargs.items() if value is None]
-
-    if missing:
-        raise ValueError(f"Missing required parameter(s): {', '.join(missing)}")
-
-
 # Function to compute omega_0 (w_0)
 
 def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
@@ -714,16 +711,10 @@ def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
 # Function to compute the preliminary aliasing coefficient k' based on sigma slope, 
 # temporal frequency interval and system parameters. 
 
-def compute_k_prime(omega_temp_freq_interval, alpha=DEFAULT_ALIASING_ALPHA,
-                    sigma_slope_alias=None, telescope_diameter=None,
-                    windspeed=None, maximum_radial_order_corrected=None):
-
-    _require_parameters(
-        sigma_slope_alias=sigma_slope_alias,
-        telescope_diameter=telescope_diameter,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-    )
+def compute_k_prime(omega_temp_freq_interval, sigma_slope_alias,
+                    telescope_diameter, windspeed,
+                    maximum_radial_order_corrected,
+                    alpha=DEFAULT_ALIASING_ALPHA):
 
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
     
@@ -741,18 +732,10 @@ def compute_k_prime(omega_temp_freq_interval, alpha=DEFAULT_ALIASING_ALPHA,
 # It uses sigma slope data from FITS files and applies 2D interpolation over 
 # modulation radius and seeing.
 
-def k_coeff_aliasing(modulation_radius, seeing, alpha=DEFAULT_ALIASING_ALPHA,
-                     telescope_diameter=None, omega_temp_freq_interval=None,
-                     file_path_matrix_R=None, windspeed=None,
-                     maximum_radial_order_corrected=None, file_path_sigma_slopes=None):
-
-    _require_parameters(
-        telescope_diameter=telescope_diameter,
-        omega_temp_freq_interval=omega_temp_freq_interval,
-        file_path_matrix_R=file_path_matrix_R,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-    )
+def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
+                     omega_temp_freq_interval, file_path_matrix_R, windspeed,
+                     maximum_radial_order_corrected,
+                     alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
 
     data_slopes = read_sigma_slopes(file_path_sigma_slopes)  
     
@@ -762,8 +745,14 @@ def k_coeff_aliasing(modulation_radius, seeing, alpha=DEFAULT_ALIASING_ALPHA,
     sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                                          modulation_radius, seeing)
     
-    k_pr = compute_k_prime(omega_temp_freq_interval, alpha, sigma_slope_alias, telescope_diameter, 
-                           windspeed, maximum_radial_order_corrected)
+    k_pr = compute_k_prime(
+        omega_temp_freq_interval,
+        sigma_slope_alias,
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
+        alpha=alpha,
+    )
     
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
     
@@ -781,14 +770,9 @@ def k_coeff_aliasing(modulation_radius, seeing, alpha=DEFAULT_ALIASING_ALPHA,
 # Function to compute the aliasing PSD matrix from the modal coefficients k.
 
 def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
-                             alpha=DEFAULT_ALIASING_ALPHA, telescope_diameter=None,
-                             windspeed=None, maximum_radial_order_corrected=None):
-
-    _require_parameters(
-        telescope_diameter=telescope_diameter,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-    )
+                             telescope_diameter, windspeed,
+                             maximum_radial_order_corrected,
+                             alpha=DEFAULT_ALIASING_ALPHA):
 
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
     
@@ -815,19 +799,9 @@ def aliasing_psd_from_coeffs(actuators_number, omega_temp_freq_interval, k,
 # with the optical gain factor (1/c_optg^2).
 
 def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval,
-                    alpha=DEFAULT_ALIASING_ALPHA, telescope_diameter=None,
-                    seeing=None, modulation_radius=None, windspeed=None,
-                    maximum_radial_order_corrected=None, file_path_matrix_R=None,
-                    file_path_sigma_slopes=None):
-
-    _require_parameters(
-        telescope_diameter=telescope_diameter,
-        seeing=seeing,
-        modulation_radius=modulation_radius,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-        file_path_matrix_R=file_path_matrix_R,
-    )
+                    telescope_diameter, seeing, modulation_radius, windspeed,
+                    maximum_radial_order_corrected, file_path_matrix_R,
+                    alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
 
     optical_gain = _format_modal_optical_gain(c_optg, actuators_number)
 
@@ -835,12 +809,12 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval,
     k = k_coeff_aliasing(
         modulation_radius,
         seeing,
+        telescope_diameter,
+        omega_temp_freq_interval,
+        file_path_matrix_R,
+        windspeed,
+        maximum_radial_order_corrected,
         alpha=alpha,
-        telescope_diameter=telescope_diameter,
-        omega_temp_freq_interval=omega_temp_freq_interval,
-        file_path_matrix_R=file_path_matrix_R,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
         file_path_sigma_slopes=file_path_sigma_slopes,
     )
 
@@ -848,10 +822,10 @@ def PSD_final_alias(c_optg, actuators_number, omega_temp_freq_interval,
         actuators_number,
         omega_temp_freq_interval,
         k,
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
         alpha=alpha,
-        telescope_diameter=telescope_diameter,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
     )
 
     return PSD_intermed / (optical_gain ** 2)
@@ -880,22 +854,21 @@ def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval)
 # with pyramid wavefront sensors", Agapito and Pinna, 2019).  
 
 def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
-                      c_optg, alpha=DEFAULT_ALIASING_ALPHA, telescope_diameter=None,
-                      seeing=None, modulation_radius=None, windspeed=None,
-                      maximum_radial_order_corrected=None, file_path_matrix_R=None,
-                      file_path_sigma_slopes=None):
+                      c_optg, telescope_diameter, seeing, modulation_radius,
+                      windspeed, maximum_radial_order_corrected, file_path_matrix_R,
+                      alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
 
     PSD_input = PSD_final_alias(
         c_optg,
         actuators_number,
         omega_temp_freq_interval,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        windspeed,
+        maximum_radial_order_corrected,
+        file_path_matrix_R,
         alpha=alpha,
-        telescope_diameter=telescope_diameter,
-        seeing=seeing,
-        modulation_radius=modulation_radius,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-        file_path_matrix_R=file_path_matrix_R,
         file_path_sigma_slopes=file_path_sigma_slopes,
     )
     
@@ -954,7 +927,7 @@ def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_o
 # PSD over the entire frequency range, as stated in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna (2019).
 
-def compute_noise_PSD_intermediate (omega_temp_freq_interval, actuators_number, sigma2_w):
+def compute_noise_PSD_intermediate(omega_temp_freq_interval, actuators_number, sigma2_w):
     
     PSD_w_intermed = np.zeros((actuators_number, len(omega_temp_freq_interval)))
   
@@ -1053,12 +1026,35 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
 
 # Function to obtain the PSDs (temp, alias, meas) OL and CL 
 
-def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, actuators_number, 
-                       alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                       maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, 
-                       dark_curr, read_out_noise, photon_flux, frame_rate, magnitudo, 
-                       n_subaperture, collecting_area, temporal_frequencies, frequencies,
-                       H_r, H_n, file_path_matrix_R, file_path_sigma_slopes):
+def compute_PSD_OL_CL(
+    PSD_atmo_turb,
+    PSD_vibration,
+    omega_temp_freq_interval,
+    actuators_number,
+    alpha,
+    telescope_diameter,
+    seeing,
+    modulation_radius,
+    windspeed,
+    maximum_radial_order_corrected,
+    c_optg,
+    F_excess,
+    pixel_pos,
+    sky_bkg,
+    dark_curr,
+    read_out_noise,
+    photon_flux,
+    frame_rate,
+    magnitudo,
+    n_subaperture,
+    collecting_area,
+    temporal_frequencies,
+    frequencies,
+    H_r,
+    H_n,
+    file_path_matrix_R,
+    file_path_sigma_slopes,
+):
     
     if np.array_equal(temporal_frequencies, frequencies):
     
@@ -1073,10 +1069,20 @@ def compute_PSD_OL_CL (PSD_atmo_turb, PSD_vibration, omega_temp_freq_interval, a
         
         
     
-    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance (H_n, actuators_number, omega_temp_freq_interval, c_optg,
-                                                                 alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
-                                                                 maximum_radial_order_corrected, file_path_matrix_R,  
-                                                                 file_path_sigma_slopes)  
+    _, _, PSD_output_alias, PSD_input_alias = aliasing_variance(
+        H_n,
+        actuators_number,
+        omega_temp_freq_interval,
+        c_optg,
+        telescope_diameter,
+        seeing,
+        modulation_radius,
+        windspeed,
+        maximum_radial_order_corrected,
+        file_path_matrix_R,
+        alpha=alpha,
+        file_path_sigma_slopes=file_path_sigma_slopes,
+    )
 
     
     _, _, PSD_output_meas, PSD_input_meas = measure_variance(
@@ -1294,14 +1300,14 @@ def _select_single_mode_psd(PSD_in, mode_index, array_name, n_frequencies, allow
 
 def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interval, t_0,
                                              PSD_atmo_turb, PSD_vibration,
+                                             telescope_diameter, seeing,
+                                             modulation_radius, windspeed,
+                                             maximum_radial_order_corrected, c_optg,
+                                             F_excess, pixel_pos, sky_bkg, dark_curr,
+                                             read_out_noise, photon_flux, frame_rate,
+                                             magnitudo, n_subaperture, collecting_area,
+                                             file_path_matrix_R,
                                              alpha=DEFAULT_ALIASING_ALPHA,
-                                             telescope_diameter=None, seeing=None,
-                                             modulation_radius=None, windspeed=None,
-                                             maximum_radial_order_corrected=None, c_optg=None,
-                                             F_excess=None, pixel_pos=None, sky_bkg=None, dark_curr=None,
-                                             read_out_noise=None, photon_flux=None, frame_rate=None,
-                                             magnitudo=None, n_subaperture=None, collecting_area=None,
-                                             file_path_matrix_R=None,
                                              file_path_sigma_slopes=None,
                                              static_fit_variance=0.0,
                                              num1=None, num2=None, num3=None,
@@ -1326,26 +1332,6 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
 
     if omega_temp_freq_interval.size == 0:
         raise ValueError("omega_temp_freq_interval must not be empty")
-
-    _require_parameters(
-        telescope_diameter=telescope_diameter,
-        seeing=seeing,
-        modulation_radius=modulation_radius,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
-        c_optg=c_optg,
-        F_excess=F_excess,
-        pixel_pos=pixel_pos,
-        sky_bkg=sky_bkg,
-        dark_curr=dark_curr,
-        read_out_noise=read_out_noise,
-        photon_flux=photon_flux,
-        frame_rate=frame_rate,
-        magnitudo=magnitudo,
-        n_subaperture=n_subaperture,
-        collecting_area=collecting_area,
-        file_path_matrix_R=file_path_matrix_R,
-    )
 
     c_optg_mode = float(_format_modal_optical_gain(c_optg, 1)[0, 0])
 
@@ -1373,12 +1359,12 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
         k_coeff_aliasing(
             modulation_radius,
             seeing,
+            telescope_diameter,
+            omega_temp_freq_interval,
+            file_path_matrix_R,
+            windspeed,
+            maximum_radial_order_corrected,
             alpha=alpha,
-            telescope_diameter=telescope_diameter,
-            omega_temp_freq_interval=omega_temp_freq_interval,
-            file_path_matrix_R=file_path_matrix_R,
-            windspeed=windspeed,
-            maximum_radial_order_corrected=maximum_radial_order_corrected,
             file_path_sigma_slopes=file_path_sigma_slopes,
         ),
         dtype=float,
@@ -1393,10 +1379,10 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
         1,
         omega_temp_freq_interval,
         np.array([k_alias[mode_index]], dtype=float),
+        telescope_diameter,
+        windspeed,
+        maximum_radial_order_corrected,
         alpha=alpha,
-        telescope_diameter=telescope_diameter,
-        windspeed=windspeed,
-        maximum_radial_order_corrected=maximum_radial_order_corrected,
     ) / (c_optg_mode ** 2)
 
     slope_noise_variance = compute_slope_noise_variance(
