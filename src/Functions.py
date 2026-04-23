@@ -555,16 +555,30 @@ def extract_propagation_coefficients(file_path_matrix_R):
 def _load_andes_gain_grid(file_mod0, file_mod4):
     """
     Loads and stacks the ANDES optical gain data from two separate FITS files.
+    It returns:
+    - A 2D grid of gain values indexed by modulation radius and seeing.
+    - The seeing axis values.
+    - The modulation radius axis values.
     """
+    
+    modal_radius_vals = np.zeros(2)
+
     with fits.open(file_mod0) as hdul:
-        gain_mod0 = hdul[0].data                # pylint: disable=E1101 
+        gain_mod0 = hdul[0].data
+        seeing_vals = hdul[1].data
+        modal_radius_vals[0] = 0  # Assuming the first file corresponds to modulation radius = 0
         
     with fits.open(file_mod4) as hdul:
-        gain_mod4 = hdul[0].data                 # pylint: disable=E1101 
-        
-  
-    return np.stack([gain_mod0, gain_mod4], axis=0)
+        gain_mod4 = hdul[0].data
+        seeing_vals_check = hdul[1].data
+        modal_radius_vals[1] = 4  # Assuming the second file corresponds to modulation radius = 4
 
+    # Check for consistency: the seeing axes in the two FITS files must match
+    if not np.array_equal(seeing_vals, seeing_vals_check):
+        raise ValueError("Consistency error: the seeing axes in the two FITS files do not match.")
+
+    # Return both the stacked grid and the seeing axis
+    return np.stack([gain_mod0, gain_mod4], axis=0), seeing_vals, modal_radius_vals
 
 # Function to compute the modal optical gain for a given modulation radius and seeing.
 # Uses an optical gain grid from ANDES_og_mod0.fits and ANDES_og_mod4.fits and performs
@@ -612,11 +626,8 @@ def compute_andes_optical_gain(file_mod0, file_mod4,
     shape ``(N_modes, 1)``. Otherwise, returns a representative scalar optical
     gain averaged over the available modes.
     """
-    gain_grid = _load_andes_gain_grid(file_mod0, file_mod4)
+    gain_grid, seeing_vals, modal_radius_vals = _load_andes_gain_grid(file_mod0, file_mod4)
 
-    # Define the grid axes for ANDES
-    modal_radius_vals = np.array([0.0, 4.0])
-    seeing_vals = np.array([0.4, 0.6, 0.8, 1.0, 1.2, 1.4])
 
     interp_optical_gain = RegularGridInterpolator((modal_radius_vals, seeing_vals),
                                                   gain_grid, bounds_error=False,
@@ -687,16 +698,42 @@ def compute_soul_optical_gain(filepath, target_mod_modes, target_binning, target
 # Function to read and return the sigma slopes data from the FITS file.
 
 def read_sigma_slopes(file_path_sigma_slopes=None):
+    """
+    Reads the sigma slopes data from the FITS file.
+    In the current implementation, the primary HDU contains a stacked array:
+      - data[0]: Seeing array
+      - data[1]: Slopes RMS time average array
+      
+    The modulation radius axis is not currently saved in the file, so a
+    default fallback array is used. Future FITS versions can store it in HDU 1.
+    """
     if file_path_sigma_slopes is None:
         file_path_sigma_slopes = DEFAULT_SIGMA_SLOPES_PATH
     
-    
-    with fits.open (file_path_sigma_slopes) as hdul:
-    
-        data = hdul[0].data                                              # pylint: disable=E1101   
+    with fits.open(file_path_sigma_slopes) as hdul:
+        data = hdul[0].data  # This is the stacked array
         
-        return data
-
+        # ---------------------------------------------------------------------
+        # SEEING AXIS EXTRACTION
+        # ---------------------------------------------------------------------
+        # Extract the seeing axis from the first slice of the stack.
+        # We use data[0, 0, :] to handle the 3D broadcasting used during the stack creation.
+        if data[0].ndim > 1:
+            seeing_vals = data[0, 0, :]
+        else:
+            seeing_vals = data[0]
+            
+        # ---------------------------------------------------------------------
+        # MODULATION RADIUS AXIS EXTRACTION
+        # ---------------------------------------------------------------------
+        # If a future FITS file has the modulation radii in the second extension, use it.
+        if len(hdul) > 1:
+            modal_radius_vals = hdul[1].data
+        else:
+            # Mandatory fallback for the current generation of FITS files
+            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+            
+        return data, seeing_vals, modal_radius_vals
 
 # Function to perform 2D interpolation of the sigma slopes data for a given modulation
 # radius and seeing.
@@ -748,14 +785,19 @@ def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
                      maximum_radial_order_corrected,
                      alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
+    """
+    Computes the aliasing modal coefficients k based on a given modulation
+    radius and seeing. Uses sigma slope data and 2D interpolation.
+    """
 
-    data_slopes = read_sigma_slopes(file_path_sigma_slopes)  
+    # Dynamically receive data and axes from the reading function
+    data_slopes, seeing_vals, modal_radius_vals = read_sigma_slopes(file_path_sigma_slopes)  
     
-    seeing_vals = data_slopes[0,0,:]                                           
-    modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0]) 
-    
-    sigma_slope_alias = double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
-                                                         modulation_radius, seeing)
+    # The interpolator uses the newly extracted grids without "magic numbers"
+    sigma_slope_alias = double_interpolation_sigma_slope(
+        modal_radius_vals, seeing_vals, data_slopes, 
+        modulation_radius, seeing
+    )
     
     k_pr = compute_k_prime(
         omega_temp_freq_interval,
@@ -768,8 +810,7 @@ def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
     
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
     
-    if p_coefficient is None:   
-                                              
+    if p_coefficient is None:                                                 
         raise RuntimeError("Propagation coefficients not loaded") 
    
     print("Propagation coefficients loaded successfully.")
@@ -897,7 +938,7 @@ def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
 # sub-aperture geometry, and source magnitude.
 
 def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                             n_subaperture, collecting_area):
+                             n_subaperture, collecting_area, pixels_per_subaperture=4):
     
     flux_per_frame = photon_flux / frame_rate
     
@@ -905,11 +946,14 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
     
     sub_aperture_area = np.pi * (sub_aperture_radius) ** 2
 
-    flux_per_frame_per_sub_aperture = flux_per_frame * (sub_aperture_area / collecting_area)
+    flux_per_frame_per_sub_aperture \
+        = flux_per_frame * (sub_aperture_area / collecting_area)
     
-    flux_per_frame_per_sub_aperture_magnitudo = flux_per_frame_per_sub_aperture * 10 ** (- magnitudo / 2.5)
+    flux_per_frame_per_sub_aperture_magnitudo \
+        = flux_per_frame_per_sub_aperture * 10 ** (- magnitudo / 2.5)
     
-    flux_per_frame_per_sub_aperture_magnitudo_per_pixel = flux_per_frame_per_sub_aperture_magnitudo / 4
+    flux_per_frame_per_sub_aperture_magnitudo_per_pixel \
+        = flux_per_frame_per_sub_aperture_magnitudo / pixels_per_subaperture
 
     return flux_per_frame_per_sub_aperture_magnitudo_per_pixel
 
@@ -922,10 +966,10 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
 
 def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                                  photon_flux, telescope_diameter,frame_rate, magnitudo, 
-                                 n_subaperture, collecting_area):
+                                 n_subaperture, collecting_area, pixels_per_subaperture=4):
     
     n_phot_pix = flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                                          n_subaperture, collecting_area)
+                                          n_subaperture, collecting_area, pixels_per_subaperture)
     
     pixel_pos = np.array(pixel_pos)                                            
     pixel_variance = F_excess ** 2 * (n_phot_pix + sky_bkg + dark_curr) + read_out_noise**2
@@ -962,12 +1006,14 @@ def compute_noise_PSD_intermediate(omega_temp_freq_interval, actuators_number, s
 def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                      photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture,
                      collecting_area, file_path_matrix_R, transf_funct,
-                     actuators_number, omega_temp_freq_interval, c_optg):
+                     actuators_number, omega_temp_freq_interval, c_optg,
+                     pixels_per_subaperture=4):
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
                                                         read_out_noise, photon_flux, telescope_diameter,
-                                                        frame_rate, magnitudo, n_subaperture, collecting_area)
+                                                        frame_rate, magnitudo, n_subaperture, collecting_area,
+                                                        pixels_per_subaperture)
    
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
     
@@ -1066,6 +1112,7 @@ def compute_PSD_OL_CL(
     H_n,
     file_path_matrix_R,
     file_path_sigma_slopes,
+    pixels_per_subaperture=4,
 ):
     
     if np.array_equal(temporal_frequencies, frequencies):
@@ -1114,6 +1161,7 @@ def compute_PSD_OL_CL(
         actuators_number,
         omega_temp_freq_interval,
         c_optg,
+        pixels_per_subaperture=pixels_per_subaperture,
     )
     
    

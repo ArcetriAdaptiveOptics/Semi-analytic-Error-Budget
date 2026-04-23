@@ -54,9 +54,7 @@ def verify_aliasing_energy():
     # --------------------------------------------------------------------------------
     # METHOD 1: Direct target variance
     # ---------------------------------------------------------------------------
-    data_slopes = read_sigma_slopes(file_sigma_slopes)
-    seeing_vals = data_slopes[0,0,:]                                           
-    modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+    data_slopes, seeing_vals, modal_radius_vals = read_sigma_slopes(file_sigma_slopes)
 
     sigma_slope_alias = double_interpolation_sigma_slope(
         modal_radius_vals, seeing_vals, data_slopes,

@@ -166,6 +166,7 @@ class TestSeeingToR0(unittest.TestCase):
     def test_positive_value(self):
         self.assertGreater(seeing_to_r0(0.8), 0.0)
 
+
 # ---------------------------------------------------------------------------
 # integrate_function
 # ---------------------------------------------------------------------------
@@ -620,7 +621,7 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
     def test_output_is_3d_ndarray(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        grid = _load_andes_gain_grid(file_mod0, file_mod4)
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
         self.assertIsInstance(grid, np.ndarray)
         self.assertEqual(grid.ndim, 3)
 
@@ -628,12 +629,14 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
         # One row for mod0, one for mod4
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        self.assertEqual(_load_andes_gain_grid(file_mod0, file_mod4).shape[0], 2)
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        self.assertEqual(grid.shape[0], 2)
 
     def test_all_values_are_positive(self):
         file_mod0 = "src/file_fits/ANDES/ANDES_og_mod0.fits"
         file_mod4 = "src/file_fits/ANDES/ANDES_og_mod4.fits"
-        self.assertTrue(np.all(_load_andes_gain_grid(file_mod0, file_mod4) > 0))
+        grid, _, _ = _load_andes_gain_grid(file_mod0, file_mod4)
+        self.assertTrue(np.all(grid > 0))
 
 
 class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
@@ -641,11 +644,17 @@ class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
 
     FILE = "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
 
-    def test_returns_ndarray(self):
-        self.assertIsInstance(read_sigma_slopes(self.FILE), np.ndarray)
+    def test_returns_ndarray_and_axes(self):
+        """Verifies that the function returns three ndarrays (data, seeing_axis, mod_radius_axis)."""
+        data, seeing_vals, modal_radius_vals = read_sigma_slopes(self.FILE)
+        self.assertIsInstance(data, np.ndarray)
+        self.assertIsInstance(seeing_vals, np.ndarray)
+        self.assertIsInstance(modal_radius_vals, np.ndarray)
 
     def test_non_negative_values(self):
-        self.assertTrue(np.all(read_sigma_slopes(self.FILE) >= 0))
+        """Verifies that the extracted slope RMS data contains only non-negative values."""
+        data, _, _ = read_sigma_slopes(self.FILE)
+        self.assertTrue(np.all(data >= 0))
 
 
 class TestLoadPSDWindshake(_ChdirMixin, unittest.TestCase):

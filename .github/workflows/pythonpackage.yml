@@ -1,0 +1,62 @@
+name: SA Error Budget Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+#  schedule:
+#    - cron: "1 1 * * *"
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+
+    env:
+      # Crucial: tells Python where to find the "src" folder across all OS environments
+      PYTHONPATH: ${{ github.workspace }}
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip' # Speeds up future builds by caching downloaded libraries
+
+    - name: Install Python dependencies
+      shell: bash # Forces bash to prevent PowerShell syntax errors on Windows
+      run: |
+        python -m pip install --upgrade pip
+        
+        # Install linting and testing tools
+        pip install pytest pytest-cov flake8
+        
+        # Install explicitly requested project dependencies
+        # Note: "astro-p3>=1.5.2" is quoted to prevent bash redirection errors
+        pip install numpy scipy matplotlib astropy sympy arte "astro-p3>=1.5.2"
+        
+        # Optional fallback: install anything else if a requirements.txt is present
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 src/ scripts/ --count --select=E9,F63,F7,F82 --show-source --statistics
+        
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 src/ scripts/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Test with pytest
+      run: |
+        # Run pytest
+        # --cov=src calculates code coverage only for files inside the src/ folder
+        pytest -v --cov=src --cov-report=xml
