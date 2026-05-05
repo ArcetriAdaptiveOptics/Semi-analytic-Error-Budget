@@ -156,10 +156,7 @@ def transfer_funct(plant_num, controller_num, plant_den, controller_den, Z):
         
 # Function to compute the controller (num_int, den_int) polynomial arrays for all modes using an integrator.
 
-def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
-
-    # Kept for API compatibility with the generic transfer-function builder.
-    _ = omega_temp_freq_interval, t_0
+def compute_int_coeff(gain, actuators_number=1):
 
     num_int_example, den_int_example = build_integrator_controller_polynomials(gain[0])
 
@@ -168,6 +165,10 @@ def compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number):
 
     for i in range(actuators_number):
         num_int_array[i, :], den_int_array[i, :] = build_integrator_controller_polynomials(gain[i])
+
+    if actuators_number == 1:
+        num_int_array = num_int_array[0]
+        den_int_array = den_int_array[0]
 
     return num_int_array, den_int_array
   
@@ -300,8 +301,25 @@ def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
     controller_den : array_like, optional
         Explicit controller denominator (descending powers of Z).
     """
+    if gain is not None and gain.shape != (actuators_number,):
+        raise ValueError(f"gain must have shape ({actuators_number},), got {gain.shape}")
+    if controller_num is not None:
+        if controller_num.ndim != 2:
+            raise ValueError("controller_num must be a 2D array")
+        if controller_num.shape[0] != actuators_number:
+            raise ValueError(
+                f"controller_num must have shape (N_modes, N_coeff), got {controller_num.shape} for N_modes={actuators_number}"
+            )
+    if controller_den is not None:
+        if controller_den.ndim != 2:
+            raise ValueError("controller_den must be a 2D array")
+        if controller_den.shape[0] != actuators_number:
+            raise ValueError(
+                f"controller_den must have shape (N_modes, N_coeff), got {controller_den.shape} for N_modes={actuators_number}"
+            )
+    
     if gain is not None:
-        ctrl_num, ctrl_den = compute_int_coeff(gain, omega_temp_freq_interval, t_0, actuators_number)
+        ctrl_num, ctrl_den = compute_int_coeff(gain, actuators_number)
     elif controller_num is not None and controller_den is not None:
         ctrl_num = controller_num
         ctrl_den = controller_den
@@ -320,6 +338,70 @@ def build_transfer_function(omega_temp_freq_interval, t_0, actuators_number,
         plant_num,
         plant_den,
     )
+    
+
+# single mode version of the transfer function builder, for convenience when only one mode is considered (e.g. tip-tilt).
+
+def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
+                            plant_num, plant_den, gain=None,
+                            controller_num=None, controller_den=None):
+    """Build both closed-loop transfer functions H_r and H_n.
+       Single-mode version of the more general build_transfer_function,
+       for convenience when only one mode is considered (e.g. tip-tilt).
+    
+    Parameters
+    ----------
+    omega_temp_freq_interval : array_like
+        Angular temporal frequency vector [rad s⁻¹].
+    t_0 : float
+        Sampling period [s].
+    plant_num : array_like
+        Pre-multiplied plant numerator polynomial (e.g. ``n1 * n2 * n3``).
+    plant_den : array_like
+        Pre-multiplied plant denominator polynomial (e.g. ``d1 * d2 * d3``).
+    gain : array_like, optional
+        Scalar gain.  Mutually exclusive with
+        ``controller_num``/``controller_den``.
+    controller_num : array_like, optional
+        Explicit controller numerator (descending powers of Z).
+        1D array of shape (N_num_coeff,).
+    controller_den : array_like, optional
+        Explicit controller denominator (descending powers of Z).
+        1D array of shape (N_den_coeff,).
+    """
+    gain = np.atleast_1d(gain) if gain is not None else None
+    if gain is not None and gain.shape != (1,):
+        raise ValueError(f"gain must have shape (1,), got {gain.shape}")
+    if controller_num is not None and controller_num.ndim != 1:
+        raise ValueError("controller_num must be a 1D array")
+    if controller_den is not None and controller_den.ndim != 1:
+        raise ValueError("controller_den must be a 1D array")
+
+    if gain is not None:
+        ctrl_num, ctrl_den = compute_int_coeff(gain)
+    elif controller_num is not None and controller_den is not None:
+        ctrl_num = controller_num
+        ctrl_den = controller_den
+    else:
+        raise ValueError(
+            "Provide either 'gain' (integrator) or both "
+            "'controller_num' and 'controller_den'"
+        )
+    
+    H_r, H_n = build_transfer_function_from_controller_polynomials(
+        ctrl_num,
+        ctrl_den,
+        omega_temp_freq_interval,
+        t_0,
+        1,
+        plant_num,
+        plant_den,
+    )
+    
+    H_r = H_r[0]
+    H_n = H_n[0]
+    
+    return H_r, H_n
     
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
