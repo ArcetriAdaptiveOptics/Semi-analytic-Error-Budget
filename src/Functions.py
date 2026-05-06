@@ -463,7 +463,7 @@ def PSD_conversion (PSD_to_convert):
 # The analytical formula yields rad^2; the function converts it to nm^2 to match the other terms.
 
 def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wavelength=500e-9):
-    """
+    """  
     Calculates the Fitting Error variance and converts it from rad^2 to nm^2.
     """
     # Variance in rad^2
@@ -475,7 +475,8 @@ def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wa
     # Variance in nm^2
     var_fitting_nm2 = var_fitting_rad2 * rad2_to_nm2
     
-    print(f"Fitting variance: {var_fitting_nm2:.2f} nm^2")
+    print("Fitting variance:", var_fitting_nm2, "nm^2")
+    print("Fitting standard deviation:" , np.sqrt(var_fitting_nm2), "nm")
     return var_fitting_nm2
 
 
@@ -587,8 +588,10 @@ def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp
     variance_vibr_OL, variance_vibr_CL, PSD_output = compute_output_PSD_and_integrate (actuators_number, transf_funct, 
                                                                                        PSD_input, omega_temp_freq_interval)
 
-    print("Vibration_OL:", variance_vibr_OL)  
-    print("Vibration_CL:", variance_vibr_CL)  
+    print("Vibration variance OL:", variance_vibr_OL, "nm^2")
+    print("Vibration standard deviation OL:", np.sqrt(variance_vibr_OL), "nm")
+    print("Vibration variance CL:", variance_vibr_CL, "nm^2")  
+    print("Vibration standard deviation CL:",np.sqrt(variance_vibr_CL), "nm")  
     
     return variance_vibr_OL, variance_vibr_CL, PSD_output, PSD_input 
 
@@ -615,8 +618,10 @@ def temporal_variance(
     variance_temp_OL, variance_temp_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
     
-    print("Temporal_OL:", variance_temp_OL) 
-    print("Temporal_CL:", variance_temp_CL) 
+    print("Temporal variance OL:", variance_temp_OL, "nm^2") 
+    print("Temporal standard deviation OL:", np.sqrt(variance_temp_OL), "nm") 
+    print("Temporal variance CL:", variance_temp_CL, "nm^2") 
+    print("Temporal standard deviation CL:", np.sqrt(variance_temp_CL), "nm") 
     
     return variance_temp_OL, variance_temp_CL, PSD_output, PSD_input 
 
@@ -1114,8 +1119,10 @@ def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
     variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                         PSD_input, omega_temp_freq_interval)
     
-    print("Aliasing_OL:", variance_alias_OL)  
-    print("Aliasing_CL:", variance_alias_CL)  
+    print("Aliasing variance OL:", variance_alias_OL, "nm^2")  
+    print("Aliasing standard deviation OL:", np.sqrt(variance_alias_OL), "nm")  
+    print("Aliasing variance CL:", variance_alias_CL, "nm^2") 
+    print("Aliasing standard deviation CL:", np.sqrt(variance_alias_CL), "nm")  
     
     return variance_alias_OL, variance_alias_CL, PSD_output, PSD_input 
     
@@ -1127,7 +1134,7 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
                              n_subaperture, collecting_area, pixels_per_subaperture=4):
     
     flux_per_frame = photon_flux / frame_rate
-    
+   
     sub_aperture_radius = (telescope_diameter / n_subaperture)/2
     
     sub_aperture_area = np.pi * (sub_aperture_radius) ** 2
@@ -1140,6 +1147,8 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
     
     flux_per_frame_per_sub_aperture_magnitudo_per_pixel \
         = flux_per_frame_per_sub_aperture_magnitudo / pixels_per_subaperture
+        
+    #print ("FLUX:", flux_per_frame_per_sub_aperture_magnitudo)
 
     return flux_per_frame_per_sub_aperture_magnitudo_per_pixel
 
@@ -1226,11 +1235,13 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     variance_meas_OL, variance_meas_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
-    print("Measure_OL:", variance_meas_OL)  
-    print("Measure_CL:", variance_meas_CL)  
+    print("Measure variance OL:", variance_meas_OL, "nm^2") 
+    print("Measure standard deviation OL:", np.sqrt(variance_meas_OL), "nm") 
+    print("Measure variance CL:", variance_meas_CL, "nm^2")  
+    print("Measure standard deviation CL:", np.sqrt(variance_meas_CL), "nm") 
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
- 
+
     
 # Function to find the gain that optimize the total variance
 
@@ -1253,7 +1264,13 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
     else:
         psd_windshake_ready = psd_windshake
-
+    
+    
+    
+    print ("\nVARIANCE CONTRIBUTIONS OBTAINED DURING BEST GAIN OPTIMIZATION:\n")
+    
+    
+    
     for i in range(len(gain_values)):
         
         g = gain_values[i]
@@ -1271,7 +1288,6 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         )
         H_n_alias = H_n_meas
         
-        
         variance_fit = fitting_variance(fitting_coeff, number_of_actuators,
                                         telescope_diameter, fried_parameter)
         
@@ -1279,7 +1295,7 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                                                        H_r_temp, number_of_actuators,
                                                        omega_temp_freq_interval)
 
-        # Chiamata esplicita con keyword arguments per evitare errori di posizionamento
+        
         _, variance_aliasing, _, _ = aliasing_variance(
             transf_funct=H_n_alias,
             actuators_number=number_of_actuators,
@@ -1295,7 +1311,7 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             file_path_sigma_slopes=sigma_slopes_path
         )
 
-        # Chiamata esplicita con keyword arguments
+        
         _, variance_measurement, _, _ = measure_variance(
             F_excess=excess_noise_factor,
             pixel_pos=slope_computer_weights,
@@ -1315,7 +1331,6 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             c_optg=c_optg
         )
 
-        print ("CLOSED LOOP:")
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
                                          np.real(variance_aliasing), np.real(variance_measurement))
     
@@ -1323,6 +1338,7 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
     gain_min_variance = gain_values[idx_min]
     
     # print ("BEST GAIN:", gain_min_variance)
+    print("\nBEST GAIN OPTIMIZATION COMPLETED. BEST GAIN =", gain_min_variance, "\n")
 
     return gain_min_variance
 
@@ -1497,7 +1513,8 @@ def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, 
 
 def total_variance(fit_err, temp_err, alias_err, meas_err):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
-    print ("Total variance:", var_tot)
+    print ("Total variance:", var_tot, "nm^2")
+    print ("Total standard deviation:", np.sqrt(var_tot), "nm")
     return var_tot 
 
 

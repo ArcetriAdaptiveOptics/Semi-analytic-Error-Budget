@@ -115,8 +115,6 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
             gain_val,
         )
        
-        
-        print ("CLOSED LOOP:")
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
                                          np.real(variance_aliasing), np.real(variance_measurement))            
     
@@ -135,7 +133,7 @@ def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_f
                                sigma_slopes_path):
 
        
-    print ('TEST') 
+    print("\nVARIANCE CONTRIBUTIONS ACROSS GAIN VALUES (plot_total_variance_mode_0):\n")
      
     actuators_number = 1                                                  
      
@@ -511,6 +509,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
           maximum_radial_order_corrected, magnitudo, c_optg, 
           file_path_sigma_slopes):
 
+    print("\nALIASING VARIANCE CHECK (check):\n")
     
     p_coefficient = extract_propagation_coefficients(reconstruction_matrix_path)
     
@@ -533,7 +532,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
         
         sigma_alias_2_two_modes += sigma_alias_2
         
-    print("ALIASING VARIANCE (OPEN LOOP):", sigma_alias_2_two_modes)
+    print("\nALIASING VARIANCE (OPEN LOOP):", sigma_alias_2_two_modes)
     
     PSD_al = PSD_final_alias(
         c_optg,
@@ -558,7 +557,7 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
     
     print("ALIASING VARIANCE ONE MODE (OPEN LOOP):", sigma_alias_2_one_mode)
     
-    print("ALIASING VARIANCE FROM PSD ONE MODE (OPEN LOOP):", integral_per_mode[0])
+    print("ALIASING VARIANCE FROM PSD ONE MODE (OPEN LOOP):", integral_per_mode[0], "\n")
 
 
 # Function to compare the mode 0 aliasing PSD from data files with the one computed 
@@ -639,6 +638,8 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         plant_den,
         gain=gain,
     )
+    
+    print ("\nVARIANCE CONTRIBUTIONS (plot_PSD_OL_CL_mode_0):\n")
     
     if np.array_equal(temporal_frequencies, frequencies):
     
