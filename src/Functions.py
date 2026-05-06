@@ -406,10 +406,10 @@ def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
 # Returns a 2D array of shape (n_modes, len(tempor_freqs)).
-# Default n_modes=2 reproduces the original tip-and-tilt behaviour.
+# Note: n_modes is a mandatory argument to prevent silent under-calculation bugs.
 
 def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_altitude,
-                   wind_speed, wind_direction, space_freqs, tempor_freqs, n_modes=2):
+                   wind_speed, wind_direction, space_freqs, tempor_freqs, n_modes):
     
     source = GuideSource((rho, theta), np.inf)
     aperture = CircularOpticalAperture(aperture_radius, aperture_center)
@@ -421,7 +421,7 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
 
     modes = list(range(2, 2 + n_modes))
 
-    # worker function to compute a single mode
+    # Worker function to compute a single mode
     def compute_single_mode(m):
         psd = vk.getGeneralZernikeCPSD(j=[m], k=[m], temp_freqs=tempor_freqs)
         return np.real(psd[0, 0, :])
@@ -429,13 +429,14 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     PSD_atmo = []
     
     # -------------------------------------------------------------------------
-    # Multiprocessing approach.
+    # Multiprocessing approach
     # -------------------------------------------------------------------------
     print(f" -> Parallel computation started on {os.cpu_count()} cores for {n_modes} modes...")
     
     with ThreadPoolExecutor() as executor:
         for m, result in zip(modes, executor.map(compute_single_mode, modes)):
             PSD_atmo.append(result)
+            # Print progress every 500 modes to avoid console spam
             if (m - 1) % 500 == 0:
                 print(f"    -> Completed {m - 1}/{n_modes} modes...")
 
@@ -462,7 +463,8 @@ def PSD_conversion (PSD_to_convert):
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019).
 # The analytical formula yields rad^2; the function converts it to nm^2 to match the other terms.
 
-def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wavelength=500e-9):
+def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wavelength=500e-9,
+                     verbose=False):
     """
     Calculates the Fitting Error variance and converts it from rad^2 to nm^2.
     """
@@ -475,7 +477,8 @@ def fitting_variance(fitting_coeff, actuators_number, telescope_diameter, r0, wa
     # Variance in nm^2
     var_fitting_nm2 = var_fitting_rad2 * rad2_to_nm2
     
-    print(f"Fitting variance: {var_fitting_nm2:.2f} nm^2")
+    if verbose:
+        print(f"Fitting variance: {var_fitting_nm2:.2f} nm^2")
     return var_fitting_nm2
 
 
@@ -579,7 +582,8 @@ def compute_output_PSD_and_integrate(actuators_number, transf_funct, PSD_input, 
 
 # Function to compute vibration variance in open loop and closed loop, returning also open loop and closed loop PSDs
 
-def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp_freq_interval):
+def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp_freq_interval,
+                       verbose=False):
  
     PSD_vib = align_psd_modes(PSD_vibration, actuators_number)
     PSD_input = PSD_vib
@@ -587,8 +591,9 @@ def vibration_variance(PSD_vibration, transf_funct, actuators_number, omega_temp
     variance_vibr_OL, variance_vibr_CL, PSD_output = compute_output_PSD_and_integrate (actuators_number, transf_funct, 
                                                                                        PSD_input, omega_temp_freq_interval)
 
-    print("Vibration_OL:", variance_vibr_OL)  
-    print("Vibration_CL:", variance_vibr_CL)  
+    if verbose:
+        print("Vibration_OL:", variance_vibr_OL)  
+        print("Vibration_CL:", variance_vibr_CL)  
     
     return variance_vibr_OL, variance_vibr_CL, PSD_output, PSD_input 
 
@@ -604,6 +609,7 @@ def temporal_variance(
     transf_funct,
     actuators_number,
     omega_temp_freq_interval,
+    verbose=False
 ):
 
     PSD_atmo = align_psd_modes(PSD_atmo_turb, actuators_number)
@@ -614,9 +620,9 @@ def temporal_variance(
 
     variance_temp_OL, variance_temp_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
-    
-    print("Temporal_OL:", variance_temp_OL) 
-    print("Temporal_CL:", variance_temp_CL) 
+    if verbose:
+        print("Temporal_OL:", variance_temp_OL)
+        print("Temporal_CL:", variance_temp_CL)
     
     return variance_temp_OL, variance_temp_CL, PSD_output, PSD_input 
 
@@ -970,7 +976,8 @@ def compute_k_prime(omega_temp_freq_interval, sigma_slope_alias,
 def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
                      omega_temp_freq_interval, file_path_matrix_R, windspeed,
                      maximum_radial_order_corrected,
-                     alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
+                     alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None,
+                     verbose=False):
     """
     Computes the aliasing modal coefficients k based on a given modulation
     radius and seeing. Uses sigma slope data and 2D interpolation.
@@ -999,7 +1006,8 @@ def k_coeff_aliasing(modulation_radius, seeing, telescope_diameter,
     if p_coefficient is None:                                                 
         raise RuntimeError("Propagation coefficients not loaded") 
    
-    print("Propagation coefficients loaded successfully.")
+    if verbose:
+        print("Propagation coefficients loaded successfully.")
    
     k_coeff = p_coefficient * k_pr
     
@@ -1095,7 +1103,8 @@ def PSD_final_meas(c_optg, sigma2_w, actuators_number, omega_temp_freq_interval)
 def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
                       c_optg, telescope_diameter, seeing, modulation_radius,
                       windspeed, maximum_radial_order_corrected, file_path_matrix_R,
-                      alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None):
+                      alpha=DEFAULT_ALIASING_ALPHA, file_path_sigma_slopes=None,
+                      verbose=False):
 
     PSD_input = PSD_final_alias(
         c_optg,
@@ -1114,8 +1123,9 @@ def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
     variance_alias_OL, variance_alias_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                         PSD_input, omega_temp_freq_interval)
     
-    print("Aliasing_OL:", variance_alias_OL)  
-    print("Aliasing_CL:", variance_alias_CL)  
+    if verbose:
+        print("Aliasing_OL:", variance_alias_OL)  
+        print("Aliasing_CL:", variance_alias_CL)  
     
     return variance_alias_OL, variance_alias_CL, PSD_output, PSD_input 
     
@@ -1193,7 +1203,7 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                      photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture,
                      collecting_area, file_path_matrix_R, transf_funct,
                      actuators_number, omega_temp_freq_interval, c_optg,
-                     pixels_per_subaperture=4):
+                     pixels_per_subaperture=4, verbose=False):
 
     
   
@@ -1208,7 +1218,8 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
         
         raise RuntimeError("Propagation coefficients not loaded") 
    
-    print("Propagation coefficients loaded successfully.")
+    if verbose:
+        print("Propagation coefficients loaded successfully.")
     
     if len(p_coefficient) < actuators_number:
         raise ValueError("Not enough propagation coefficients for the selected number of modes")
@@ -1226,63 +1237,71 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     variance_meas_OL, variance_meas_CL, PSD_output = compute_output_PSD_and_integrate(actuators_number, transf_funct, 
                                                                                       PSD_input, omega_temp_freq_interval)
-    print("Measure_OL:", variance_meas_OL)  
-    print("Measure_CL:", variance_meas_CL)  
+    if verbose:
+        print("Measure_OL:", variance_meas_OL)  
+        print("Measure_CL:", variance_meas_CL)  
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
  
     
-# Function to find the gain that optimize the total variance
+# Function to find the gain that optimizes the total variance.
+# It supports block optimization by accepting a base gain vector (frozen modes)
+# and a list of modes to optimize during the current sweep.
 
-def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
-                    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
-                    excess_noise_factor, sky_background, dark_current, readout_noise,
-                    photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
-                    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
-                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
-                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg): # <-- AGGIUNTO c_optg
+def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
+                   t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+                   excess_noise_factor, sky_background, dark_current, readout_noise,
+                   photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                   slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+                   wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+                   psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
+                   actuators_number, modes_to_optimize, base_gain_vector=None):
     
-    number_of_actuators = 1                                                  
-     
-    gain_values = np.arange(gain_min, gain_max, 0.1)   
-                                                     
+    # If no base vector is provided, start with a vector of zeros
+    if base_gain_vector is None:
+        base_gain_vector = np.zeros(actuators_number)
+    else:
+        # Create a copy to prevent overwriting the original array
+        base_gain_vector = np.array(base_gain_vector, copy=True)
+        
+    gain_values = np.arange(gain_min, gain_max, 0.05)   
     tot_variance = np.zeros_like(gain_values, dtype=float)
     
-    # Eseguiamo l'interpolazione fuori dal loop per efficienza (non cambia ad ogni guadagno!)
+    # Perform interpolation outside the loop for efficiency
     if not np.array_equal(t_freqs, f):
-        psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
+        psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
     else:
         psd_windshake_ready = psd_windshake
 
     for i in range(len(gain_values)):
         
         g = gain_values[i]
-        gain_val = np.array([g])                                               
-
-###########################       
         
+        # Create the gain vector for this iteration:
+        # Keep the frozen gains, but overwrite the modes we are optimizing with 'g'
+        current_gain_vector = np.copy(base_gain_vector)
+        current_gain_vector[modes_to_optimize] = g                                            
+
         H_r_temp, H_n_meas = build_transfer_function(
             omega_temp_freq_interval,
             t_0,
-            number_of_actuators,
+            actuators_number,
             plant_num,
             plant_den,
-            gain=gain_val,
+            gain=current_gain_vector, 
         )
         H_n_alias = H_n_meas
         
-        
-        variance_fit = fitting_variance(fitting_coeff, number_of_actuators,
+        variance_fit = fitting_variance(fitting_coeff, actuators_number,
                                         telescope_diameter, fried_parameter)
         
         _, variance_temporal, _, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
-                                                       H_r_temp, number_of_actuators,
+                                                       H_r_temp, actuators_number,
                                                        omega_temp_freq_interval)
 
-        # Chiamata esplicita con keyword arguments per evitare errori di posizionamento
         _, variance_aliasing, _, _ = aliasing_variance(
             transf_funct=H_n_alias,
-            actuators_number=number_of_actuators,
+            actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
             c_optg=c_optg,
             telescope_diameter=telescope_diameter,
@@ -1295,7 +1314,6 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             file_path_sigma_slopes=sigma_slopes_path
         )
 
-        # Chiamata esplicita con keyword arguments
         _, variance_measurement, _, _ = measure_variance(
             F_excess=excess_noise_factor,
             pixel_pos=slope_computer_weights,
@@ -1310,21 +1328,19 @@ def find_best_gain (gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             collecting_area=collecting_area,
             file_path_matrix_R=reconstruction_matrix_path,
             transf_funct=H_n_meas,
-            actuators_number=number_of_actuators,
+            actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
             c_optg=c_optg
         )
 
-        print ("CLOSED LOOP:")
+        # We don't print "CLOSED LOOP:" here to avoid flooding the terminal during the sweep
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
                                          np.real(variance_aliasing), np.real(variance_measurement))
     
     idx_min = np.argmin(tot_variance)
-    gain_min_variance = gain_values[idx_min]
-    
-    # print ("BEST GAIN:", gain_min_variance)
+    best_gain_for_selected_modes = gain_values[idx_min]
 
-    return gain_min_variance
+    return best_gain_for_selected_modes, gain_values, tot_variance
 
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.
@@ -1495,11 +1511,15 @@ def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, 
 
 # Function to compute the total variance by summing fitting variance, temporal variance, and meas variance contributions.
 
-def total_variance(fit_err, temp_err, alias_err, meas_err):
+def total_variance(fit_err, temp_err, alias_err, meas_err, verbose=False):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
-    print ("Total variance:", var_tot)
-    return var_tot 
-
+    if verbose:
+        print ("Fitting variance [nm]:", np.sqrt(np.real(fit_err)))
+        print ("Temporal variance [nm]:", np.sqrt(np.real(temp_err)))
+        print ("Aliasing variance [nm]:", np.sqrt(np.real(alias_err)))
+        print ("Measurement variance [nm]:", np.sqrt(np.real(meas_err)))
+        print ("Total variance [nm]:", np.sqrt(np.real(var_tot)))
+    return var_tot
 
 @dataclass
 class SingleModeControllerOptimizationRecord:

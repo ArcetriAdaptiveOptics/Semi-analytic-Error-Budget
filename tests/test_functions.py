@@ -10,12 +10,12 @@ or:
 """
 
 import os
-import sys
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 from scipy import integrate as scipy_integrate
+
 
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
@@ -41,6 +41,8 @@ from src.Functions import (
     seeing_to_r0,
     total_variance,
     transfer_funct,
+    turbulence_psd,
+    find_best_gain
 )
 
 # Absolute path to the repository root (parent of this test/ directory)
@@ -712,3 +714,84 @@ class TestLoadPSDWindshake(_ChdirMixin, unittest.TestCase):
     def test_psd_and_frequency_lengths_match(self):
         freq, psd = load_PSD_windshake(self.FILE)
         self.assertEqual(psd.shape[1], len(freq))
+
+# ---------------------------------------------------------------------------
+# turbulence_psd
+# ---------------------------------------------------------------------------
+
+class TestTurbulencePSD(unittest.TestCase):
+    """Test the atmospheric turbulence PSD computation."""
+
+    def test_missing_n_modes_raises_type_error(self):
+        """Verifies that omitting the mandatory n_modes argument fails fast."""
+        with self.assertRaises(TypeError):
+            # Calling without n_modes must raise a TypeError immediately
+            turbulence_psd(
+                0.0, 0.0, 4.0, [0.0, 0.0, 0.0], 0.15, 25.0, 0.0, 
+                15.0, 0.0, np.array([1.0]), np.array([1.0])
+            )
+
+
+# ---------------------------------------------------------------------------
+# find_best_gain
+# ---------------------------------------------------------------------------
+
+class TestFindBestGain(unittest.TestCase):
+    """Tests the modal block optimization sweep logic."""
+
+    @patch('src.Functions.total_variance')
+    @patch('src.Functions.measure_variance')
+    @patch('src.Functions.aliasing_variance')
+    @patch('src.Functions.temporal_variance')
+    @patch('src.Functions.fitting_variance')
+    @patch('src.Functions.build_transfer_function')
+    def test_returns_three_elements_and_respects_arrays(
+        self, mock_build, mock_fit, mock_temp, mock_alias, mock_meas, mock_tot
+    ):
+        """
+        Verifies that find_best_gain returns (best_gain, gain_values, variances)
+        and successfully iterates without doing heavy physics math (using mocks).
+        """
+        # 1. Setup lightweight mock returns to bypass slow physics calculations
+        mock_build.return_value = (MagicMock(), MagicMock())
+        mock_fit.return_value = 1.0
+        mock_temp.return_value = (1.0, 1.0, MagicMock(), MagicMock())
+        mock_alias.return_value = (1.0, 1.0, MagicMock(), MagicMock())
+        mock_meas.return_value = (1.0, 1.0, MagicMock(), MagicMock())
+        
+        # Simulate a parabolic variance curve: V = (gain - 0.2)^2 + 10
+        # The minimum will naturally be at gain = 0.2
+        def dummy_total_variance(*args, **kwargs):
+            # Extract the current gain being tested from the build_transfer_function mock
+            current_gain_vector = mock_build.call_args.kwargs['gain']
+            g = current_gain_vector[0] 
+            return (g - 0.2)**2 + 10.0
+            
+        mock_tot.side_effect = dummy_total_variance
+
+        # 2. Call the function with dummy structural inputs
+        best_gain, gains, variances = find_best_gain(
+            gain_min=0.1, gain_max=0.4, 
+            omega_temp_freq_interval=np.array([1.0]), 
+            t_freqs=np.array([1.0]), f=np.array([1.0]),
+            t_0=0.001, plant_num=np.array([1.0]), plant_den=np.array([1.0]), 
+            telescope_diameter=8.0, fried_parameter=0.15,
+            excess_noise_factor=1.0, sky_background=0.0, dark_current=0.0, 
+            readout_noise=0.0, photon_flux=1000, frame_rate=1000, 
+            magnitude=0.0, n_subaperture=40, collecting_area=50,
+            slope_computer_weights=np.array([1.0]), fitting_coeff=0.27, 
+            alpha=-17/3, seeing=0.8, modulation_radius=3.0,
+            wind_speed=15.0, maximum_radial_order_corrected=10, 
+            reconstruction_matrix_path="dummy.fits",
+            psd_turbulence=MagicMock(), psd_windshake=MagicMock(), 
+            sigma_slopes_path="dummy.fits", c_optg=np.array([1.0]),
+            actuators_number=2, modes_to_optimize=[0, 1]
+        )
+        
+        # 3. Assertions
+        self.assertIsInstance(gains, np.ndarray)
+        self.assertIsInstance(variances, np.ndarray)
+        self.assertEqual(len(gains), len(variances))
+        
+        # Check if the mock successfully found the minimum at 0.2
+        self.assertAlmostEqual(best_gain, 0.2, places=2)

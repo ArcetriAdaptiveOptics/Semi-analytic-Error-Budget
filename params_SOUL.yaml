@@ -1,6 +1,6 @@
 telescope:
   # Primary mirror diameter in [m]
-  telescope_diam: 38.5
+  telescope_diam: 8.222
   # Collecting area of ELT in [m^2]
   collect_area: 1000
 
@@ -14,15 +14,15 @@ atmosphere:
 
 wavefront_sensor:
   # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
-  value_for_F_excess_noise: 1
+  value_for_F_excess_noise: 2
   # Sky background in [photo-electrons]
   sky_backgr: 0
   # Dark current in [photo-electrons]
   dark_curr: 0
   # Readout noise in [photo-electrons]
-  noise_readout: 5
+  noise_readout: 0.2
   # Number of sub apertures on the diameter of the telescope
-  number_of_sub: 100
+  number_of_sub: 40
   # Modulation radius [lambda/D]
   modulation_radius: 3
   # Modal radius for optg grid
@@ -75,7 +75,7 @@ control:
   sampling_time: 0.001
   # Weights on the 4 pyramid pixels used by the slope computer.
   # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
-  slope_computer_weights: [1, 0, 0, 0]
+  slope_computer_weights: [1, 1, 1, 1]
   # Gain: set gain_n: 1 and gain_min for a single uniform gain for all modes
   gain_min: 0.01
   gain_n: 1

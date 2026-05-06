@@ -121,41 +121,6 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
                                          np.real(variance_aliasing), np.real(variance_measurement))            
     
     return tot_variance
-
-
-# Function to plot the total residual variance of the system as a function 
-# of the gain, considering only the first mode.
-
-def plot_total_variance_mode_0(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f, t_0, plant_num,
-                               plant_den, telescope_diameter, fried_parameter, excess_noise_factor,
-                               sky_background, dark_current, readout_noise, photon_flux, frame_rate, magnitude,
-                               n_subaperture, collecting_area, slope_computer_weights, fitting_coeff, alpha, seeing,
-                               modulation_radius, wind_speed, maximum_radial_order_corrected,
-                               reconstruction_matrix_path, psd_turbulence, psd_windshake,
-                               sigma_slopes_path):
-
-       
-    print ('TEST') 
-     
-    actuators_number = 1                                                  
-     
-    gain_value = np.arange(gain_min, gain_max, 0.1)
-    variance_total = variance_total_for_test(actuators_number, gain_value, omega_temp_freq_interval, t_freqs, f,
-                                             t_0, plant_num, plant_den, telescope_diameter,
-                                             fried_parameter, excess_noise_factor, sky_background, dark_current,
-                                             readout_noise, photon_flux, frame_rate, magnitude, n_subaperture,
-                                             collecting_area, slope_computer_weights, fitting_coeff, alpha, seeing,
-                                             modulation_radius, wind_speed, maximum_radial_order_corrected,
-                                             reconstruction_matrix_path, psd_turbulence,
-                                             psd_windshake, sigma_slopes_path)
-        
-    plt.plot(gain_value, variance_total, marker='o')  
-    plt.xlabel('Gain')
-    plt.ylabel('Total variance')
-    plt.yscale('log')
-    plt.title('Total variance as a function of the gain')
-    plt.grid()
-    plt.show()
        
         
 # Defines a function that allows, when needed, to plot PSD_in, PSD_out, and the transfer 
@@ -724,6 +689,28 @@ def plot_psd_vibr_soul (file_path_wind):
     plt.legend()
     plt.show()
     
+ 
+# Function to plot the total residual variance of the system as a function 
+# of the gain, showing separate curves for orthogonal blocks (e.g. Tip-Tilt vs Higher Orders)
+
+def plot_gain_optimization_sweep(gain_vals_TT, var_TT, gain_vals_HO=None, var_HO=None):
+    
+    plt.figure(figsize=(9, 6))
+    
+    plt.plot(gain_vals_TT, var_TT, linewidth=2, label='Tip-Tilt Block (Modes 0-1)')
+    
+    # Se abbiamo calcolato anche gli alti ordini, li disegniamo
+    if gain_vals_HO is not None and var_HO is not None:
+        plt.plot(gain_vals_HO, var_HO, linewidth=2, label='Higher Orders Block')
+        
+    plt.yscale('log')
+    plt.xlabel('Integrator Gain')
+    plt.ylabel('Total Variance [nm^2]')
+    plt.title('Gain Optimization Sweep')
+    plt.grid(True, which='both', linestyle=':', alpha=0.7)
+    plt.legend()
+    plt.show()
+ 
  
 # Function to compare the optical gain values obtained from the two different 
 # functions to compute optg in SOUL case.
