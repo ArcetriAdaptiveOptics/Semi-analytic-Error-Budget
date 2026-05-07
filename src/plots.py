@@ -751,41 +751,7 @@ def optg_soul_comparison (file_soul_optical_gain_cube, target_binning,
     plt.legend()
     plt.show()
     
-    
-    
-    
-    
-########### FINIRE !!!!!!!!!!!!
-  
-    
-    
-# Function to compute modal variances by integrating a PSD matrix over the frequency axis.
-# Returns a real 1D array of variance per mode.  
-    
-def _integrate_modal_psd(psd_matrix, omega_vector):
-    
-    psd_matrix = np.asarray(psd_matrix)
-    omega_vector = np.asarray(omega_vector)
-
-    if psd_matrix.ndim != 2:
-        raise ValueError("PSD matrix must be 2D")
-
-    if psd_matrix.shape[1] == omega_vector.size:
-        axis_freq = 1
-    elif psd_matrix.shape[0] == omega_vector.size:
-        axis_freq = 0
-    else:
-        raise ValueError("PSD matrix shape is incompatible with omega vector length")
-
-    integrated = integrate.simpson(psd_matrix, omega_vector, axis=axis_freq)
-    integrated = np.real_if_close(integrated, tol=1000)
-
-    if np.iscomplexobj(integrated):
-        integrated = np.real(integrated)
-
-    return np.asarray(integrated, dtype=float).ravel()
-    
-    
+   
 # Function to compute and plot modal variances by integrating PSD components over 
 # frequency and combining them into total variance per mode.
 
@@ -793,6 +759,7 @@ def _integrate_modal_psd(psd_matrix, omega_vector):
 def plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas, 
                            var_fit, omega_temporal_freqs, actuators_number): 
     
+    from scripts.main_saeb import _integrate_modal_psd
 
     var_temp_modes = _integrate_modal_psd(PSD_out_temp, omega_temporal_freqs)
     var_vibr_modes = _integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
@@ -807,11 +774,13 @@ def plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_me
     # total_vibr_variance = np.sum(var_vibr_modes)
     # total_alias_variance = np.sum(var_alias_modes)
     # total_meas_variance = np.sum(var_meas_modes)
+    # total_fit_variance = np.sum(var_fit_modes)
     # total_variance = np.sum(var_total_modes)
     # print ("\nTEMP SUM:", total_temp_variance)
     # print ("VIBR SUM:", total_vibr_variance)
     # print ("ALIASING SUM:", total_alias_variance)
     # print ("MEAS SUM:", total_meas_variance)
+    # print ("FIT SUM:", total_fit_variance)
     # print ("TOTAL SUM:", total_variance)
     
     mode_axis = np.arange(n_modes) + 1
