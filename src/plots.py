@@ -35,7 +35,7 @@ from src.Functions import compute_optical_gain
 # Function to compute the total residual variance for a set of gain values,
 # by combining fitting, temporal, aliasing and measurement error contributions 
   
-def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_interval, t_freqs, f,
+def variance_total_for_test(actuators_number, gain_values, omega_temp_freq_interval, t_freqs, f,
                             t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
                             excess_noise_factor, sky_background, dark_current, readout_noise,
                             photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
@@ -56,7 +56,7 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
         H_r_temp, H_n_meas = build_transfer_function(
             omega_temp_freq_interval,
             t_0,
-            number_of_actuators,
+            actuators_number,
             plant_num,
             plant_den,
             gain=gain_val,
@@ -64,26 +64,26 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
         H_n_alias = H_n_meas
         
         
-        variance_fit = fitting_variance(fitting_coeff, number_of_actuators, telescope_diameter, fried_parameter)
+        variance_fit = fitting_variance(fitting_coeff, actuators_number, telescope_diameter, fried_parameter)
         
          
         if np.array_equal(t_freqs, f): 
             
-            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, number_of_actuators,
+            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, actuators_number,
                                                               omega_temp_freq_interval)
 
         else: 
             
-            PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, number_of_actuators)
+            PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
             _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, PSD_wind_vib_interp_norm,
-                                                           H_r_temp, number_of_actuators, omega_temp_freq_interval)
+                                                           H_r_temp, actuators_number, omega_temp_freq_interval)
 
         
         
         
         _, variance_aliasing, _, _ = aliasing_variance(
             transf_funct=H_n_alias,
-            actuators_number=number_of_actuators,
+            actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
             c_optg=gain_val,
             alpha=alpha,
@@ -110,7 +110,7 @@ def variance_total_for_test(number_of_actuators, gain_values, omega_temp_freq_in
             collecting_area,
             reconstruction_matrix_path,
             H_n_meas,
-            number_of_actuators,
+            actuators_number,
             omega_temp_freq_interval,
             gain_val,
         )

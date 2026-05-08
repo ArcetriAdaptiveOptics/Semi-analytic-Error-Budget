@@ -1312,7 +1312,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         )
         H_n_alias = H_n_meas
         
-        variance_fit = fitting_variance(fitting_coeff, number_of_actuators,
+        variance_fit = fitting_variance(fitting_coeff, actuators_number,
                                         telescope_diameter, fried_parameter)
         
         _, variance_temporal, _, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
@@ -1358,9 +1358,8 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                                          np.real(variance_aliasing), np.real(variance_measurement))
     
     idx_min = np.argmin(tot_variance)
-    
-    # print ("BEST GAIN:", gain_min_variance)
-    print("\nBEST GAIN OPTIMIZATION COMPLETED. BEST GAIN =", gain_min_variance, "\n")
+    print("\nBEST GAIN OPTIMIZATION COMPLETED. BEST GAIN MIN & MAX=",
+          base_gain_vector.min(), base_gain_vector.max(), "\n")
     best_gain_for_selected_modes = gain_values[idx_min]
 
     return best_gain_for_selected_modes, gain_values, tot_variance
