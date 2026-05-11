@@ -39,7 +39,7 @@ from src.plots import plot
 from src.plots import plot_PSD_OL_CL_mode_0
 from src.plots import plot_psd_vibr_soul
 from src.plots import optg_soul_comparison
-
+from src.plots import plot_variance_vs_modes
 
 system = "SOUL"
 
@@ -356,6 +356,9 @@ var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, v
 ##### PLOTS AND CHECKS
 
 if display:
+    
+    plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas,
+                           var_fit, omega_temporal_freqs, n_actuators)
 
     # 1. Plot Gain Sweep Optimization
     if gain_number == 1:
