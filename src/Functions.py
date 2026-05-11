@@ -1269,7 +1269,9 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
-                   actuators_number, modes_to_optimize, base_gain_vector=None):
+                   actuators_number, modes_to_optimize, base_gain_vector=None,  
+                   verbose=False
+                   ):
     
     # If no base vector is provided, start with a vector of zeros
     if base_gain_vector is None:
@@ -1354,9 +1356,11 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
     idx_min = np.argmin(tot_variance)
     best_gain_for_selected_modes = gain_values[idx_min]
     
-    print("\nBest gain for selected modes =", best_gain_for_selected_modes)
-    print("Minimum total variance =", tot_variance[idx_min])
-    print("Base gain vector min/max =", base_gain_vector.min(), base_gain_vector.max(), "\n")
+    if verbose:
+        
+        print("\nBest gain for selected modes =", best_gain_for_selected_modes)
+        print("Minimum total variance =", tot_variance[idx_min])
+        print("Base gain vector min/max =", base_gain_vector.min(), base_gain_vector.max())
 
     return best_gain_for_selected_modes, gain_values, tot_variance
 
@@ -1802,8 +1806,31 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
     )
 
 
-         
+# Function to integrate a modal PSD over the frequency vector and return 
+# the modal variances as a 1D array.
 
+def _integrate_modal_psd(psd_matrix, omega_vector):
+    psd_matrix = np.asarray(psd_matrix)
+    omega_vector = np.asarray(omega_vector)
+
+    if psd_matrix.ndim != 2:
+        raise ValueError("PSD matrix must be 2D")
+
+    if psd_matrix.shape[1] == omega_vector.size:
+        axis_freq = 1
+    elif psd_matrix.shape[0] == omega_vector.size:
+        axis_freq = 0
+    else:
+        raise ValueError("PSD matrix shape is incompatible with omega vector length")
+
+    integrated = integrate.simpson(psd_matrix, omega_vector, axis=axis_freq)
+    integrated = np.real_if_close(integrated, tol=1000)
+
+    if np.iscomplexobj(integrated):
+        integrated = np.real(integrated)
+
+    return np.asarray(integrated, dtype=float).ravel()
+       
 
 
 

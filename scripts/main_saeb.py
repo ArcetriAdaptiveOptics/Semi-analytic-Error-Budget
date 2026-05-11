@@ -35,6 +35,7 @@ from src.Functions import temporal_variance
 from src.Functions import total_variance
 from src.Functions import turbulence_psd
 from src.Functions import vibration_variance
+from src.Functions import _integrate_modal_psd
 from src.plots import summary_display
 
 
@@ -98,29 +99,6 @@ def _build_gain_vector(loop_params, n_actuators):
         )
 
     raise ValueError("Set gain_n: 1 with gain_min, or provide gain_value/gain_vector")
-
-
-def _integrate_modal_psd(psd_matrix, omega_vector):
-    psd_matrix = np.asarray(psd_matrix)
-    omega_vector = np.asarray(omega_vector)
-
-    if psd_matrix.ndim != 2:
-        raise ValueError("PSD matrix must be 2D")
-
-    if psd_matrix.shape[1] == omega_vector.size:
-        axis_freq = 1
-    elif psd_matrix.shape[0] == omega_vector.size:
-        axis_freq = 0
-    else:
-        raise ValueError("PSD matrix shape is incompatible with omega vector length")
-
-    integrated = integrate.simpson(psd_matrix, omega_vector, axis=axis_freq)
-    integrated = np.real_if_close(integrated, tol=1000)
-
-    if np.iscomplexobj(integrated):
-        integrated = np.real(integrated)
-
-    return np.asarray(integrated, dtype=float).ravel()
 
 
 def run(yaml_file):

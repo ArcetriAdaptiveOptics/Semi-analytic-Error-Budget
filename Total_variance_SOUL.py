@@ -121,6 +121,8 @@ n_subapert = param['wavefront_sensor']['number_of_sub']
 collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
+display = param['display']['enabled']
+
 if file_optg is not None and file_optg_cube is None:
 
     c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
@@ -132,9 +134,8 @@ elif file_optg is None and file_optg_cube is not None:
                                        magnitude, n_actuators)
 else:
     
-    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
+    raise RuntimeError("Either 'file_optg_cube' or 'file_optg' must be provided") 
 
-display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
 
@@ -195,11 +196,11 @@ else:
             wind_speed, maximum_radial_order, file_path_R1,
             PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
             actuators_number=n_actuators, modes_to_optimize=modes_TT, 
-            base_gain_vector=final_gain_vector
+            base_gain_vector=final_gain_vector, verbose=False
             )
         
         final_gain_vector[modes_TT] = best_gain_TT
-        print(f"Best Tip-Tilt gain found: {best_gain_TT:.2f}")
+        print(f"\nBest Tip-Tilt gain found: {best_gain_TT:.2f}")
 
         # STEP 2: Higher Orders Optimization (Mode 2 onwards)
         if n_actuators > 2:
@@ -216,11 +217,11 @@ else:
                 wind_speed, maximum_radial_order, file_path_R1,
                 PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
                 actuators_number=n_actuators, modes_to_optimize=modes_HO, 
-                base_gain_vector=final_gain_vector
+                base_gain_vector=final_gain_vector, verbose=False
                 )
             
             final_gain_vector[modes_HO] = best_gain_HO
-            print(f"Best Higher Orders gain found: {best_gain_HO:.2f}")
+            print(f"\nBest Higher Orders gain found: {best_gain_HO:.2f}")
 
         gain_ = final_gain_vector
 
@@ -337,7 +338,6 @@ var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, v
 # PLOTS AND CHECKS
 # =============================================================================
 
-
 if display:
     
     plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas,
@@ -349,16 +349,16 @@ if display:
             plot_gain_optimization_sweep(gain_vals_TT, var_TT)
         else:
             plot_gain_optimization_sweep(gain_vals_TT, var_TT, gain_vals_HO, var_HO)
-
+    
     # plot_psd_vibr_soul (file_path_wind)
-
+    
     # plot(omega_temporal_freqs, H_r_temp, H_n_meas, H_n_alias, PSD_in_vibr, PSD_out_vibr, PSD_in_temp, PSD_out_temp,
     #      PSD_in_meas, PSD_out_meas, PSD_in_alias, PSD_out_alias)
                                
-
+    
     # plot_all_PSD(omega_temporal_freqs, PSD_out_temp, PSD_out_meas, PSD_out_alias)
-
-
+    
+    
     # # check(file_path_R1, telescope_diameter, seeing, modulation_radius,
     # #       n_actuators, alpha_, omega_temporal_freqs, wind_speed, maximum_radial_order,
     # #       magnitude, bin_value, c_optg, file_sigma_slope)
@@ -379,8 +379,8 @@ if display:
     #                           seeing, modulation_radius, wind_speed, maximum_radial_order,
     #                           magnitude, file_path_R1, c_optg, file_sigma_slope, 
     #                           file_modal_psd_alias_path)
-
-
+    
+    
     # plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
     #                       PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
     #                       maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
@@ -388,7 +388,7 @@ if display:
     #                       file_path_R1, file_sigma_slope)
     
     # if system == "SOUL":
-
+    
     #     if file_optg_cube is None:
     #         file_optg_cube = "src/file_fits/LBT/SOUL_OPTG.fits"
     
@@ -401,12 +401,12 @@ if display:
     
     
     
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
+
+
+

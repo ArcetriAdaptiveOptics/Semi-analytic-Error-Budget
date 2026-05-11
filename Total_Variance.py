@@ -141,6 +141,8 @@ n_subapert = param['wavefront_sensor']['number_of_sub']
 collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
+display = param['display']['enabled']
+
 if file_optg is not None and file_optg_cube is None:
 
     c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
@@ -152,9 +154,8 @@ elif file_optg is None and file_optg_cube is not None:
                                        magnitude, n_actuators)
 else:
     
-    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
+    raise RuntimeError("Either 'file_optg_cube' or 'file_optg' must be provided") 
 
-display = True
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
 
@@ -215,11 +216,11 @@ else:
             wind_speed, maximum_radial_order, file_path_R1,
             PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
             actuators_number=n_actuators, modes_to_optimize=modes_TT, 
-            base_gain_vector=final_gain_vector
+            base_gain_vector=final_gain_vector, verbose=False
             )
         
         final_gain_vector[modes_TT] = best_gain_TT
-        print(f"Best Tip-Tilt gain found: {best_gain_TT:.2f}")
+        print(f"\nBest Tip-Tilt gain found: {best_gain_TT:.2f}")
 
         # STEP 2: Higher Orders Optimization (Mode 2 onwards)
         if n_actuators > 2:
@@ -236,11 +237,11 @@ else:
                 wind_speed, maximum_radial_order, file_path_R1,
                 PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
                 actuators_number=n_actuators, modes_to_optimize=modes_HO, 
-                base_gain_vector=final_gain_vector
+                base_gain_vector=final_gain_vector, verbose=False
                 )
             
             final_gain_vector[modes_HO] = best_gain_HO
-            print(f"Best Higher Orders gain found: {best_gain_HO:.2f}")
+            print(f"\nBest Higher Orders gain found: {best_gain_HO:.2f}")
 
         gain_ = final_gain_vector
 
