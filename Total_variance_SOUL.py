@@ -40,20 +40,8 @@ from src.plots import plot_gain_optimization_sweep
 # from src.plots import optg_soul_comparison
 from src.plots import plot_variance_vs_modes
 
-system = "SOUL"
 
-if system == "ANDES":
-
-    param = load_parameters('params_ANDES.yaml')
-
-elif system =="SOUL":
-    
-    param = load_parameters('params_Total_variance_SOUL.yaml')
-      
-else:
-    
-    raise RuntimeError("system must be 'ANDES' or 'SOUL'") 
-
+param = load_parameters('params_Total_variance_SOUL.yaml')
 
 print("Parameters loaded successfully.")
   
@@ -69,10 +57,8 @@ wind_speed = param['atmosphere']['wind_speed']
 seeing = param['atmosphere']['seeing']
 fried_param = seeing_to_r0(seeing)
 
-
 rho = 0
 theta = 0
-
 
 value_F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
 F_excess_noise = np.sqrt(value_F_excess_noise)
@@ -123,12 +109,7 @@ bin_value = param['control']['bin']
  
 modulation_radius = param['wavefront_sensor']['modulation_radius']
 # here we do not use n_actuators because it can be reduced to analyse the error on a small number of modes.
-if system == "ANDES":
-    maximum_radial_order = 88
-elif system == "SOUL":
-    maximum_radial_order = 35
-else:
-    maximum_radial_order = radial_order_from_n_modes(n_actuators)
+maximum_radial_order = 35
  
 fitting_coeff = 0.2778
 alpha_ = -17/3
@@ -358,7 +339,6 @@ var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, v
 
 
 if display:
-    
     
     plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas,
                            var_fit, omega_temporal_freqs, n_actuators)
