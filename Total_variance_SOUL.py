@@ -8,7 +8,7 @@ Created on Fri Nov 14 15:17:28 2025
 
 # pylint: disable=C
 
-import numpy as np 
+import numpy as np
 
 from src.Functions import seeing_to_r0
 from src.Functions import turbulence_psd
@@ -30,7 +30,7 @@ from src.Functions import find_best_gain
 from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain
 
-# from src.plots import plot_total_variance_mode_0
+from src.plots import plot_gain_optimization_sweep
 # from src.plots import plot_all_PSD
 # from src.plots import check
 # from src.plots import plot_PSD_alias_mode_0
@@ -39,8 +39,6 @@ from src.Functions import final_soul_optical_gain
 # from src.plots import plot_psd_vibr_soul
 # from src.plots import optg_soul_comparison
 from src.plots import plot_variance_vs_modes
-
-
 
 system = "SOUL"
 
@@ -169,23 +167,19 @@ print("PSD windshake and corresponding frequencies loaded successfully.")
 PSD_wind_vib = PSD_conversion(PSD_wind_vib)
 
 PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
-                            layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs)
+                            layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs,
+                            n_modes=n_actuators)
 
 d2 = funct_d2(total_delay)
 plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
 plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
 
-
-best_gain = find_best_gain(gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-                           t_0, plant_num, plant_den, telescope_diameter, fried_param,
-                           F_excess_noise, sky_background, dark_current, readout_noise,
-                           phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
-                           x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
-                           wind_speed, maximum_radial_order, file_path_R1,
-                           PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg)
-
+# -----------------------------------------------------------------------------
+# GAIN CONFIGURATION AND OPTIMIZATION
+# -----------------------------------------------------------------------------
 
 if gain_value is not None:
+    # Use explicitly provided gain values from the YAML file
     gain_value_array = np.asarray(gain_value, dtype=float).ravel()
     gain_number_array = np.asarray(gain_number, dtype=int).ravel()
 
@@ -200,8 +194,57 @@ if gain_value is not None:
         raise ValueError("gain_value and gain_n must have the same length")
 else:
     if gain_number == 1:
-        gain_ = np.full(n_actuators, float(best_gain))
+        
+        # ---------------------------------------------------------------------
+        # BLOCK OPTIMIZATION
+        # ---------------------------------------------------------------------
+        final_gain_vector = np.zeros(n_actuators)
+        
+        # STEP 1: Tip and Tilt Optimization (Modes 0 and 1)
+        modes_TT = [0, 1] if n_actuators > 1 else [0]
+        
+        print("\n--- Tip-Tilt Gain Optimization ---")
+        # Catturiamo i 3 output
+        best_gain_TT, gain_vals_TT, var_TT = find_best_gain(
+            gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
+            t_0, plant_num, plant_den, telescope_diameter, fried_param,
+            F_excess_noise, sky_background, dark_current, readout_noise,
+            phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+            x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
+            wind_speed, maximum_radial_order, file_path_R1,
+            PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
+            actuators_number=n_actuators, modes_to_optimize=modes_TT, 
+            base_gain_vector=final_gain_vector
+            )
+        
+        final_gain_vector[modes_TT] = best_gain_TT
+        print(f"Best Tip-Tilt gain found: {best_gain_TT:.2f}")
+
+        # STEP 2: Higher Orders Optimization (Mode 2 onwards)
+        if n_actuators > 2:
+            modes_HO = list(range(2, n_actuators))
+            
+            print("\n--- Higher Orders Gain Optimization ---")
+            # Catturiamo i 3 output
+            best_gain_HO, gain_vals_HO, var_HO = find_best_gain(
+                gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
+                t_0, plant_num, plant_den, telescope_diameter, fried_param,
+                F_excess_noise, sky_background, dark_current, readout_noise,
+                phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+                x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
+                wind_speed, maximum_radial_order, file_path_R1,
+                PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
+                actuators_number=n_actuators, modes_to_optimize=modes_HO, 
+                base_gain_vector=final_gain_vector
+                )
+            
+            final_gain_vector[modes_HO] = best_gain_HO
+            print(f"Best Higher Orders gain found: {best_gain_HO:.2f}")
+
+        gain_ = final_gain_vector
+
     elif gain_number == n_actuators:
+        # Fallback for sweep configuration
         gain_ = np.linspace(gain_minimum, gain_maximum, gain_number)
     else:
         raise ValueError("Set gain_n to 1 or n_modes, or provide gain_value")
@@ -219,8 +262,6 @@ H_r_temp, H_n_meas = build_transfer_function(
     gain=gain_,
 )
 H_n_alias = H_n_meas
-
-print ("VARIANCE CONTRIBUTIONS TO THE TOTAL VARIANCE USING THE BEST GAIN:\n")
 
 #################
 # FIT  ---->  Variance 
@@ -307,29 +348,27 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
 
 print ("\nTOTAL VARIANCE USING THE BEST GAIN:")
 print ("\nOPEN LOOP TOTAL VARIANCE:")
-var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL)
+var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL, verbose=True)
 print ("CLOSED LOOP TOTAL VARIANCE:")
-var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL)
+var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, verbose=True)
 
-
-##### PLOTS AND CHECKS
+# =============================================================================
+# PLOTS AND CHECKS
+# =============================================================================
 
 
 if display:
     
+    
     plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas,
                            var_fit, omega_temporal_freqs, n_actuators)
     
-    
-    
-  
-
-    # plot_total_variance_mode_0(gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-    #                            t_0, plant_num, plant_den, telescope_diameter, fried_param, F_excess_noise,
-    #                            sky_background, dark_current, readout_noise, phot_flux, frame_rate, magnitude,
-    #                            n_subapert, collecting_area, x_pixel, fitting_coeff, alpha_, seeing,
-    #                            modulation_radius, wind_speed, maximum_radial_order, file_path_R1,
-    #                            PSD_atmosf, PSD_wind_vib, file_sigma_slope)
+    # 1. Plot Gain Sweep Optimization
+    if gain_number == 1:
+        if n_actuators <= 2:
+            plot_gain_optimization_sweep(gain_vals_TT, var_TT)
+        else:
+            plot_gain_optimization_sweep(gain_vals_TT, var_TT, gain_vals_HO, var_HO)
 
     # plot_psd_vibr_soul (file_path_wind)
 
@@ -367,8 +406,7 @@ if display:
     #                       maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
     #                       phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
     #                       file_path_R1, file_sigma_slope)
-
-        
+    
     # if system == "SOUL":
 
     #     if file_optg_cube is None:
@@ -377,21 +415,18 @@ if display:
     #     optg_soul_comparison (file_optg_cube, bin_value, magnitude, n_actuators, 
     #                           file_optg[0], file_optg[1], seeing, modulation_radius)
         
-          
-
+        
+        
+      
     
-
-
-
-
-
-
-
-
-
-
-
-
     
-
+    
+    
+    
+    
+    
+    
+    
+    
+    
     

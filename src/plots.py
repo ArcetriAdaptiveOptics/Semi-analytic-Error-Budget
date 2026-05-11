@@ -604,8 +604,6 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         gain=gain,
     )
     
-    print ("\nVARIANCE CONTRIBUTIONS (plot_PSD_OL_CL_mode_0):\n")
-    
     if np.array_equal(temporal_frequencies, frequencies):
     
         _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  

@@ -1286,13 +1286,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
     else:
         psd_windshake_ready = psd_windshake
-    
-    
-    
-    print ("\nVARIANCE CONTRIBUTIONS OBTAINED DURING BEST GAIN OPTIMIZATION:\n")
-    
-    
-    
+
     for i in range(len(gain_values)):
         
         g = gain_values[i]
@@ -1358,9 +1352,11 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                                          np.real(variance_aliasing), np.real(variance_measurement))
     
     idx_min = np.argmin(tot_variance)
-    print("\nBEST GAIN OPTIMIZATION COMPLETED. BEST GAIN MIN & MAX=",
-          base_gain_vector.min(), base_gain_vector.max(), "\n")
     best_gain_for_selected_modes = gain_values[idx_min]
+    
+    print("\nBest gain for selected modes =", best_gain_for_selected_modes)
+    print("Minimum total variance =", tot_variance[idx_min])
+    print("Base gain vector min/max =", base_gain_vector.min(), base_gain_vector.max(), "\n")
 
     return best_gain_for_selected_modes, gain_values, tot_variance
 

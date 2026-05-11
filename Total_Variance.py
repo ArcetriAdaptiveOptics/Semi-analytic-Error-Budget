@@ -204,7 +204,7 @@ else:
         # STEP 1: Tip and Tilt Optimization (Modes 0 and 1)
         modes_TT = [0, 1] if n_actuators > 1 else [0]
         
-        print("\n--- Tip-Tilt Optimization ---")
+        print("\n--- Tip-Tilt Gain Optimization ---")
         # Catturiamo i 3 output
         best_gain_TT, gain_vals_TT, var_TT = find_best_gain(
             gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
@@ -214,8 +214,9 @@ else:
             x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
             wind_speed, maximum_radial_order, file_path_R1,
             PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
-            actuators_number=n_actuators, modes_to_optimize=modes_TT, base_gain_vector=final_gain_vector
-        )
+            actuators_number=n_actuators, modes_to_optimize=modes_TT, 
+            base_gain_vector=final_gain_vector
+            )
         
         final_gain_vector[modes_TT] = best_gain_TT
         print(f"Best Tip-Tilt gain found: {best_gain_TT:.2f}")
@@ -224,7 +225,7 @@ else:
         if n_actuators > 2:
             modes_HO = list(range(2, n_actuators))
             
-            print("\n--- Higher Orders Optimization ---")
+            print("\n--- Higher Orders Gain Optimization ---")
             # Catturiamo i 3 output
             best_gain_HO, gain_vals_HO, var_HO = find_best_gain(
                 gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
@@ -234,8 +235,9 @@ else:
                 x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
                 wind_speed, maximum_radial_order, file_path_R1,
                 PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
-                actuators_number=n_actuators, modes_to_optimize=modes_HO, base_gain_vector=final_gain_vector
-            )
+                actuators_number=n_actuators, modes_to_optimize=modes_HO, 
+                base_gain_vector=final_gain_vector
+                )
             
             final_gain_vector[modes_HO] = best_gain_HO
             print(f"Best Higher Orders gain found: {best_gain_HO:.2f}")
@@ -261,8 +263,6 @@ H_r_temp, H_n_meas = build_transfer_function(
     gain=gain_,
 )
 H_n_alias = H_n_meas
-
-print ("VARIANCE CONTRIBUTIONS TO THE TOTAL VARIANCE USING THE BEST GAIN:\n")
 
 #################
 # FIT  ---->  Variance 
@@ -354,7 +354,6 @@ print ("CLOSED LOOP TOTAL VARIANCE:")
 var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, verbose=True)
 
 ##### PLOTS AND CHECKS
-
 
 if display:
 
