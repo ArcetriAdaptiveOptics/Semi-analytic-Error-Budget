@@ -37,6 +37,7 @@ from src.Functions import turbulence_psd
 from src.Functions import vibration_variance
 from src.Functions import _integrate_modal_psd
 from src.plots import summary_display
+from src.config_utils import resolve_binning_config
 
 
 def _resolve_yaml_path(yaml_file):
@@ -107,6 +108,8 @@ def run(yaml_file):
 
     if param is None:
         raise RuntimeError("Parameters not loaded")
+
+    param = resolve_binning_config(param)
 
     print("Parameters loaded successfully.")
 
