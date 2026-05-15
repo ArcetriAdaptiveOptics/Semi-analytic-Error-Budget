@@ -22,7 +22,7 @@ wavefront_sensor:
   # Readout noise in [photo-electrons]
   noise_readout: 5
   # Number of sub apertures on the diameter of the telescope
-  number_of_sub: 10
+  number_of_sub: 0 # NOTE: defined in binning_configs
   # Modulation radius [lambda/D]
   modulation_radius: 3
   # Modal radius for optg grid
@@ -36,19 +36,19 @@ guide_star:
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
-  reconstruction_matrix: ""
+  reconstruction_matrix: "" # NOTE: defined in binning_configs
   # Path to wind-shake PSD (tip and tilt)
   windshake_psd: "src/file_fits/LBT/LBTelabVibrationsNew.fits"
   # Path to sigma slopes from aliasing
-  sigma_slopes: ""
+  sigma_slopes: "" # NOTE: defined in binning_configs
   # Path to SOUL optical gain cube
   #    Note that the cube should be provided if no optical gain models are given,
   #    and vice versa. If both are provided, an error is raised.
   # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
   # Path to SOUL modulation models (binning 1, mod0 and mod3)
-  optical_gain_models: ["", ""]
+  optical_gain_models: ["", ""] # NOTE: defined in binning_configs
   # Path to modal PSD_aliasing from specula 
-  modal_psd_alias: ""
+  modal_psd_alias: "" # NOTE: defined in binning_configs
 
 # ---------------------------------------------------------------------------
 # Optional binning configuration table.
@@ -122,7 +122,7 @@ frequency_ranges:
 
 control:
   # Number of corrected modes
-  n_modes: 0
+  n_modes: 0 # NOTE: defined in binning_configs
   # Sampling time in [s] — also sets the Nyquist frequency
   sampling_time: 0.005
   # Weights on the 4 pyramid pixels used by the slope computer.
