@@ -65,7 +65,7 @@ data:
 # ---------------------------------------------------------------------------
 binning_configs:
   1:
-    n_modes: 300
+    n_modes: 630
     n_subapert: 40
     reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
     sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
