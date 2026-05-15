@@ -36,19 +36,71 @@ guide_star:
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
-  reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn630_noise_prop_coeff.fits"
+  reconstruction_matrix: ""
   # Path to wind-shake PSD (tip and tilt)
   windshake_psd: "src/file_fits/LBT/LBTelabVibrationsNew.fits"
   # Path to sigma slopes from aliasing
-  sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+  sigma_slopes: ""
   # Path to SOUL optical gain cube
   #    Note that the cube should be provided if no optical gain models are given,
   #    and vice versa. If both are provided, an error is raised.
   # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
   # Path to SOUL modulation models (binning 1, mod0 and mod3)
-  optical_gain_models: ["src/file_fits/LBT/SOUL_og_mod0_ext630.fits", "src/file_fits/LBT/SOUL_og_mod3_ext630.fits"]
+  optical_gain_models: ["", ""]
   # Path to modal PSD_aliasing from specula 
-  modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+  modal_psd_alias: ""
+
+# ---------------------------------------------------------------------------
+# Optional binning configuration table.
+#
+# When this section is present, setting control.bin to 1, 2, 3, or 4 is
+# sufficient to switch the full detector-binning configuration: n_modes,
+# n_subapert, reconstruction matrix, sigma slopes, modal aliasing PSD, and
+# optical-gain files are all overwritten automatically before the run starts.
+#
+# The flat parameters in the sections above remain as fallback / legacy values
+# and are used unchanged when this section is absent.
+#
+# Sub-aperture counts per binning:  1x1 -> 40,  2x2 -> 20,  3x3 -> 13,  4x4 -> 10
+# Corrected modes per binning    :  1x1 -> 300, 2x2 -> 209, 3x3 -> 90,  4x4 -> 54
+# ---------------------------------------------------------------------------
+binning_configs:
+  1:
+    n_modes: 630
+    n_subapert: 40
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn630_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_ext630.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_ext630.fits"
+  2:
+    n_modes: 209
+    n_subapert: 20
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr20x20_wl750_fv2.1_ma3_bn2_mn209_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn2.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn2.fits"
+  3:
+    n_modes: 90
+    n_subapert: 13
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr13x13_wl750_fv2.1_ma3_bn3_mn90_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn3.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn3.fits"
+  4:
+    n_modes: 54
+    n_subapert: 10
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr10x10_wl750_fv2.1_ma3_bn4_mn54_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn4.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn4.fits"
 
 plant:
   # Denominator polynomial coefficients of the W transfer function
@@ -70,7 +122,7 @@ frequency_ranges:
 
 control:
   # Number of corrected modes
-  n_modes: 54
+  n_modes: 0
   # Sampling time in [s] — also sets the Nyquist frequency
   sampling_time: 0.005
   # Weights on the 4 pyramid pixels used by the slope computer.
@@ -82,7 +134,7 @@ control:
   # Total delay (WFS + RTC + DM) in [s]
   total_delay: 3
   # Binning
-  bin: 1  
+  bin: 4
 
 display:
   # Enable/disable all visualization blocks

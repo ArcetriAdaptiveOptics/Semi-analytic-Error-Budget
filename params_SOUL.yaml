@@ -36,19 +36,20 @@ guide_star:
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
-  reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
+  reconstruction_matrix: ""
   # Path to wind-shake PSD (tip and tilt)
   windshake_psd: "src/file_fits/LBT/LBTelabVibrationsNew.fits"
   # Path to sigma slopes from aliasing
-  sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
+  sigma_slopes: ""
   # Path to SOUL optical gain cube
   #    Note that the cube should be provided if no optical gain models are given,
   #    and vice versa. If both are provided, an error is raised.
   # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
   # Path to SOUL modulation models (binning 1, mod0 and mod3)
-  optical_gain_models: ["src/file_fits/LBT/SOUL_og_mod0.fits", "src/file_fits/LBT/SOUL_og_mod3.fits"]
+  optical_gain_models: ["", ""]
   # Path to modal PSD_aliasing from specula 
-  modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+  modal_psd_alias: ""
+
 # ---------------------------------------------------------------------------
 # Optional binning configuration table.
 #
@@ -67,12 +68,12 @@ binning_configs:
   1:
     n_modes: 630
     n_subapert: 40
-    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn500_noise_prop_coeff.fits"
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn630_noise_prop_coeff.fits"
     sigma_slopes: "src/file_fits/LBT/slopes_rms_time_avg_all_SOUL.fits"
     modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
     optical_gain_models:
-      - "src/file_fits/LBT/SOUL_og_mod0.fits"
-      - "src/file_fits/LBT/SOUL_og_mod3.fits"
+      - "src/file_fits/LBT/SOUL_og_mod0_ext630.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_ext630.fits"
   2:
     n_modes: 209
     n_subapert: 20
