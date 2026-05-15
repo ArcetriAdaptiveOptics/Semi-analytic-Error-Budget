@@ -345,7 +345,7 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
     H_n_meas,
     n_actuators,
     omega_temporal_freqs,
-    c_optg,
+    c_optg, verbose=True
 )
 
 print ("\nTOTAL VARIANCE USING THE BEST GAIN:")

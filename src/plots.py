@@ -113,7 +113,7 @@ def variance_total_for_test(actuators_number, gain_values, omega_temp_freq_inter
             H_n_meas,
             actuators_number,
             omega_temp_freq_interval,
-            gain_val,
+            gain_val, verbose=False
         )
        
         tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
@@ -649,7 +649,7 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         H_n,
         actuators_number,
         omega_temp_freq_interval,
-        c_optg,
+        c_optg, verbose=False
     )
     
     

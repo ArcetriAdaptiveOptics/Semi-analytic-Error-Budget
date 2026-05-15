@@ -22,7 +22,7 @@ wavefront_sensor:
   # Readout noise in [photo-electrons]
   noise_readout: 5
   # Number of sub apertures on the diameter of the telescope
-  number_of_sub: 40
+  number_of_sub: 10
   # Modulation radius [lambda/D]
   modulation_radius: 3
   # Modal radius for optg grid
@@ -32,7 +32,7 @@ guide_star:
   # Number of photons per second per collecting area
   flux_photons: 9.0e12
   # Guide star magnitude
-  magn: 8.5
+  magn: 16.5
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
@@ -70,9 +70,9 @@ frequency_ranges:
 
 control:
   # Number of corrected modes
-  n_modes: 500
+  n_modes: 54
   # Sampling time in [s] — also sets the Nyquist frequency
-  sampling_time: 0.000666
+  sampling_time: 0.005
   # Weights on the 4 pyramid pixels used by the slope computer.
   # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
   slope_computer_weights: [1, 1, 1, 1]
@@ -91,3 +91,5 @@ display:
   summary_modes_to_plot: null
   # Enable legacy plots/checks in addition to the new summary display
   show_legacy_plots: true
+  # Enable/disable PSD windshake
+  enable_PSD_vibr: false

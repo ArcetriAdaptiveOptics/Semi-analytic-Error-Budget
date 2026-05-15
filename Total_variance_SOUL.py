@@ -125,20 +125,28 @@ collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
 display = param['display']['enabled']
+enable_PSD_windhake = param['display']['enable_PSD_vibr']
+
+
+
+
+
+print ("\nFRAME RATE:",frame_rate, "\n")
 
 if file_optg is not None and file_optg_cube is None:
 
     c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
                                   modulation_radius, n_actuators,
                                   modulation_radii=(0.0, 4.0))
+    
 elif file_optg is None and file_optg_cube is not None:
     
     c_optg = final_soul_optical_gain(file_optg_cube, bin_value,
                                        magnitude, n_actuators)
+    
 else:
     
     raise RuntimeError("Either 'file_optg_cube' or 'file_optg' must be provided") 
-
 
 freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
 
@@ -149,7 +157,12 @@ if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is N
 print("PSD windshake and corresponding frequencies loaded successfully.")
 
 
-PSD_wind_vib = PSD_conversion(PSD_wind_vib)
+if enable_PSD_windhake:
+    PSD_wind_vib = PSD_conversion(PSD_wind_vib)
+
+else:
+    PSD_wind_vib = 0 * PSD_conversion(PSD_wind_vib)
+    
 
 PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs,
@@ -328,7 +341,7 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
     H_n_meas,
     n_actuators,
     omega_temporal_freqs,
-    c_optg,
+    c_optg, verbose_flux=True
 )
 
 print ("\nTOTAL VARIANCE USING THE BEST GAIN:")

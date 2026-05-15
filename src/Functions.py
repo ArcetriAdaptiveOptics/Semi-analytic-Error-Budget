@@ -1143,7 +1143,8 @@ def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
 # sub-aperture geometry, and source magnitude.
 
 def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                             n_subaperture, collecting_area, pixels_per_subaperture=4):
+                             n_subaperture, collecting_area, pixels_per_subaperture=4,
+                             verbose_flux=False):
     
     flux_per_frame = photon_flux / frame_rate
    
@@ -1160,7 +1161,11 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
     flux_per_frame_per_sub_aperture_magnitudo_per_pixel \
         = flux_per_frame_per_sub_aperture_magnitudo / pixels_per_subaperture
         
-    #print ("FLUX:", flux_per_frame_per_sub_aperture_magnitudo)
+    if verbose_flux:
+        
+        #print ("\nFLUX PER FRAME (PER S.A.):", flux_per_frame_per_sub_aperture)
+        
+        print ("\nFLUX PER FRAME:", flux_per_frame_per_sub_aperture_magnitudo)
 
     return flux_per_frame_per_sub_aperture_magnitudo_per_pixel
 
@@ -1173,10 +1178,12 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
 
 def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                                  photon_flux, telescope_diameter,frame_rate, magnitudo, 
-                                 n_subaperture, collecting_area, pixels_per_subaperture=4):
+                                 n_subaperture, collecting_area, pixels_per_subaperture=4,
+                                 verbose_flux=False):
     
     n_phot_pix = flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                                          n_subaperture, collecting_area, pixels_per_subaperture)
+                                          n_subaperture, collecting_area, pixels_per_subaperture, 
+                                          verbose_flux=verbose_flux)
     
     pixel_pos = np.array(pixel_pos)                                            
     pixel_variance = F_excess ** 2 * (n_phot_pix + sky_bkg + dark_curr) + read_out_noise**2
@@ -1214,14 +1221,14 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                      photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture,
                      collecting_area, file_path_matrix_R, transf_funct,
                      actuators_number, omega_temp_freq_interval, c_optg,
-                     pixels_per_subaperture=4, verbose=False):
+                     pixels_per_subaperture=4, verbose=False, verbose_flux=False):
 
     
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
                                                         read_out_noise, photon_flux, telescope_diameter,
                                                         frame_rate, magnitudo, n_subaperture, collecting_area,
-                                                        pixels_per_subaperture)
+                                                        pixels_per_subaperture, verbose_flux=verbose_flux)
    
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
     
@@ -1270,7 +1277,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
                    actuators_number, modes_to_optimize, base_gain_vector=None,  
-                   verbose=False
+                   verbose=False, verbose_flux=False
                    ):
     
     # If no base vector is provided, start with a vector of zeros
@@ -1346,7 +1353,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             transf_funct=H_n_meas,
             actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
-            c_optg=c_optg
+            c_optg=c_optg, verbose=False, verbose_flux=False
         )
 
         # We don't print "CLOSED LOOP:" here to avoid flooding the terminal during the sweep
@@ -1433,7 +1440,7 @@ def compute_PSD_OL_CL(
     H_n,
     file_path_matrix_R,
     file_path_sigma_slopes,
-    pixels_per_subaperture=4,
+    verbose=False, verbose_flux=False
 ):
     
     if np.array_equal(temporal_frequencies, frequencies):
@@ -1482,10 +1489,9 @@ def compute_PSD_OL_CL(
         actuators_number,
         omega_temp_freq_interval,
         c_optg,
-        pixels_per_subaperture=pixels_per_subaperture,
+        verbose=False, verbose_flux=False
     )
     
-   
     return PSD_output_temp, PSD_input_temp, PSD_output_alias, PSD_input_alias, PSD_output_meas, PSD_input_meas
 
 
@@ -1521,7 +1527,8 @@ def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, 
                                                                                                           n_subaperture, collecting_area, 
                                                                                                           temporal_frequencies, frequencies, 
                                                                                                           H_r, H_n, file_path_matrix_R,  
-                                                                                                          file_path_sigma_slopes)
+                                                                                                          file_path_sigma_slopes,  
+                                                                                                          verbose=False, verbose_flux=False)
     
     
     PSD_total_input = PSD_in_temp + PSD_in_alias + PSD_in_meas
@@ -1698,7 +1705,8 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
                                              file_path_sigma_slopes=None,
                                              static_fit_variance=0.0,
                                              num1=None, num2=None, num3=None,
-                                             den1=None, den2=None, den3=None):
+                                             den1=None, den2=None, den3=None,
+                                             verbose_flux=False):
     """
     Prepare a reusable single-mode optimization context for an IIR controller.
 
@@ -1775,7 +1783,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
     slope_noise_variance = compute_slope_noise_variance(
         F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
         photon_flux, telescope_diameter, frame_rate, magnitudo,
-        n_subaperture, collecting_area
+        n_subaperture, collecting_area, verbose_flux=verbose_flux
     )
 
     p_coefficient = np.asarray(extract_propagation_coefficients(file_path_matrix_R), dtype=float)
