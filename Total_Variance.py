@@ -9,7 +9,6 @@ Created on Fri Nov 14 15:17:28 2025
 # pylint: disable=C
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 from src.Functions import seeing_to_r0
 from src.Functions import turbulence_psd

@@ -17,7 +17,6 @@ from src.Functions import total_variance
 from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
-from src.Functions import radial_order_from_n_modes
 
 from src.Functions import fitting_variance
 from src.Functions import build_transfer_function
