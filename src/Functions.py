@@ -1264,65 +1264,72 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
     
     return variance_meas_OL, variance_meas_CL, PSD_output, PSD_input 
 
-    
-# Function to find the gain that optimizes the total variance.
-# It supports block optimization by accepting a base gain vector (frozen modes)
-# and a list of modes to optimize during the current sweep.
 
-def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
-                   t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
-                   excess_noise_factor, sky_background, dark_current, readout_noise,
-                   photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
-                   slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
-                   wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
-                   psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
-                   actuators_number, modes_to_optimize, base_gain_vector=None,  
-                   verbose=False, verbose_flux=False
-                   ):
+def _compute_modal_variance_grid(
+    gain_min, gain_max,
+    omega_temp_freq_interval, t_freqs, f,
+    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+    excess_noise_factor, sky_background, dark_current, readout_noise,
+    photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
+    actuators_number,
+    verbose_flux=False
+):
+    """
+    Compute modal variance grid: modal_variances[mode_idx, gain_idx].
     
-    # If no base vector is provided, start with a vector of zeros
-    if base_gain_vector is None:
-        base_gain_vector = np.zeros(actuators_number)
-    else:
-        # Create a copy to prevent overwriting the original array
-        base_gain_vector = np.array(base_gain_vector, copy=True)
+    This computes all modal variances ONCE for all gain values, enabling efficient
+    block-wise optimization by simple summation over modal indices.
+    
+    Args:
+        gain_min, gain_max: gain sweep range (step 0.05)
+        [other parameters same as find_best_gain]
         
-    gain_values = np.arange(gain_min, gain_max, 0.05)   
-    tot_variance = np.zeros_like(gain_values, dtype=float)
+    Returns:
+        gain_values: numpy array of gain values swept
+        modal_variances: (n_modes, n_gains) array where each row is one mode's variance
+                        across all gain values
+    """
+    gain_values = np.arange(gain_min, gain_max, 0.05)
+    n_gains = len(gain_values)
+    modal_variances = np.zeros((actuators_number, n_gains), dtype=float)
+    
+    # Precompute gain-independent components
+    variance_fit_total = fitting_variance(fitting_coeff, actuators_number,
+                                          telescope_diameter, fried_parameter)
+    # Distribute fitting variance equally across modes
+    variance_fit_per_mode = variance_fit_total / actuators_number
     
     # Perform interpolation outside the loop for efficiency
     if not np.array_equal(t_freqs, f):
         psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
     else:
         psd_windshake_ready = psd_windshake
-
-    for i in range(len(gain_values)):
+    
+    # Sweep over all gain values
+    for gain_idx, g in enumerate(gain_values):
         
-        g = gain_values[i]
+        # Create gain vector with all modes set to g
+        gain_vector = np.full(actuators_number, g, dtype=float)
         
-        # Create the gain vector for this iteration:
-        # Keep the frozen gains, but overwrite the modes we are optimizing with 'g'
-        current_gain_vector = np.copy(base_gain_vector)
-        current_gain_vector[modes_to_optimize] = g                                            
-
         H_r_temp, H_n_meas = build_transfer_function(
             omega_temp_freq_interval,
             t_0,
             actuators_number,
             plant_num,
             plant_den,
-            gain=current_gain_vector, 
+            gain=gain_vector,
         )
         H_n_alias = H_n_meas
         
-        variance_fit = fitting_variance(fitting_coeff, actuators_number,
-                                        telescope_diameter, fried_parameter)
+        # Compute PSDs (these are per-mode matrices)
+        _, _, PSD_temporal, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
+                                              H_r_temp, actuators_number,
+                                              omega_temp_freq_interval)
         
-        _, variance_temporal, _, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
-                                                       H_r_temp, actuators_number,
-                                                       omega_temp_freq_interval)
-
-        _, variance_aliasing, _, _ = aliasing_variance(
+        _, _, PSD_aliasing, _ = aliasing_variance(
             transf_funct=H_n_alias,
             actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
@@ -1336,8 +1343,8 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             alpha=alpha,
             file_path_sigma_slopes=sigma_slopes_path
         )
-
-        _, variance_measurement, _, _ = measure_variance(
+        
+        _, _, PSD_measurement, _ = measure_variance(
             F_excess=excess_noise_factor,
             pixel_pos=slope_computer_weights,
             sky_bkg=sky_background,
@@ -1353,23 +1360,275 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
             transf_funct=H_n_meas,
             actuators_number=actuators_number,
             omega_temp_freq_interval=omega_temp_freq_interval,
-            c_optg=c_optg, verbose=False, verbose_flux=False
+            c_optg=c_optg, verbose=False, verbose_flux=verbose_flux
         )
-
-        # We don't print "CLOSED LOOP:" here to avoid flooding the terminal during the sweep
-        tot_variance[i] = total_variance(np.real(variance_fit), np.real(variance_temporal), 
-                                         np.real(variance_aliasing), np.real(variance_measurement))
+        
+        # Integrate each mode's PSD to get modal variances
+        for mode_idx in range(actuators_number):
+            var_temporal_modal = integrate.simpson(PSD_temporal[mode_idx, :], omega_temp_freq_interval)
+            var_aliasing_modal = integrate.simpson(PSD_aliasing[mode_idx, :], omega_temp_freq_interval)
+            var_measurement_modal = integrate.simpson(PSD_measurement[mode_idx, :], omega_temp_freq_interval)
+            
+            modal_variances[mode_idx, gain_idx] = (
+                variance_fit_per_mode +
+                np.real(var_temporal_modal) +
+                np.real(var_aliasing_modal) +
+                np.real(var_measurement_modal)
+            )
     
+    return gain_values, modal_variances
+
+    
+# Function to find the gain that optimizes the total variance.
+# It supports block optimization by accepting a base gain vector (frozen modes)
+# and a list of modes to optimize during the current sweep.
+
+def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
+                   t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+                   excess_noise_factor, sky_background, dark_current, readout_noise,
+                   photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                   slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+                   wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+                   psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
+                   actuators_number, modes_to_optimize, base_gain_vector=None,  
+                   verbose=False, verbose_flux=False
+                   ):
+    """
+    Find best gain for specified modes using modal variance grid.
+    
+    Computes modal variance grid once and optimizes by aggregating modes.
+    If base_gain_vector is provided, modes not in modes_to_optimize are ignored
+    (this is for compatibility; in modal approach, we optimize all at once).
+    """
+    
+    # Compute modal variance grid ONCE
+    gain_values, modal_variances = _compute_modal_variance_grid(
+        gain_min, gain_max,
+        omega_temp_freq_interval, t_freqs, f,
+        t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+        excess_noise_factor, sky_background, dark_current, readout_noise,
+        photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+        slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+        wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+        psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
+        actuators_number,
+        verbose_flux=verbose_flux
+    )
+    
+    # Aggregate variances for the specified modes
+    tot_variance = np.sum(modal_variances[modes_to_optimize, :], axis=0)
+    
+    # Find best gain
     idx_min = np.argmin(tot_variance)
     best_gain_for_selected_modes = gain_values[idx_min]
     
     if verbose:
-        
         print("\nBest gain for selected modes =", best_gain_for_selected_modes)
         print("Minimum total variance =", tot_variance[idx_min])
-        print("Base gain vector min/max =", base_gain_vector.min(), base_gain_vector.max())
 
     return best_gain_for_selected_modes, gain_values, tot_variance
+
+
+# -----------------------------------------------------------------------------
+# GAIN OPTIMIZATION SECTION
+# -----------------------------------------------------------------------------
+
+_GAIN_MAXIMUM_MAPPING = {
+    1: 2.0,
+    2: 1.0,
+    3: 0.6,
+    4: 0.4,
+}
+
+_VALID_GAIN_MODES = {
+    "fixed",
+    "block_optimization",
+    "legacy_sweep",
+}
+
+
+def gain_maximum_from_total_delay(total_delay):
+    """Return the maximum sweep gain associated with a control delay."""
+    gain_maximum = _GAIN_MAXIMUM_MAPPING.get(total_delay)
+
+    if gain_maximum is None:
+        raise ValueError(
+            f"Unsupported total_delay={total_delay}. Expected one of: "
+            f"{sorted(_GAIN_MAXIMUM_MAPPING)}"
+        )
+
+    return gain_maximum
+
+
+def resolve_gain_mode(control):
+    """Resolve the gain policy from explicit keys or legacy fallbacks."""
+    gain_mode = control.get("gain_mode")
+
+    if gain_mode is not None:
+        gain_mode = str(gain_mode).strip()
+        if gain_mode not in _VALID_GAIN_MODES:
+            raise ValueError(
+                f"Unsupported gain_mode={gain_mode!r}. Expected one of: "
+                f"{sorted(_VALID_GAIN_MODES)}"
+            )
+        return gain_mode
+
+    if control.get("gain_block_sizes") is not None or control.get("gain_blocks") is not None:
+        return "block_optimization"
+
+    if control.get("gain_value") is not None or control.get("gain_vector") is not None:
+        return "fixed"
+
+    gain_number = control.get("gain_n")
+    if gain_number is not None:
+        gain_number_array = np.asarray(gain_number).ravel()
+        if gain_number_array.size == 1 and int(gain_number_array[0]) > 1:
+            return "legacy_sweep"
+        return "fixed"
+
+    raise ValueError(
+        "Unable to infer gain_mode. Set control.gain_mode to fixed, "
+        "block_optimization, or legacy_sweep."
+    )
+
+
+def normalize_gain_block_sizes(gain_block_sizes, actuators_number):
+    """Validate and normalize block sizes.
+
+    ``None`` in the last position means "all remaining modes".
+    ``-1`` is accepted as a backward-compatible alias for the same meaning.
+    """
+    block_sizes = list(np.asarray(gain_block_sizes, dtype=object).ravel())
+
+    if len(block_sizes) == 0:
+        raise ValueError("gain_block_sizes must not be empty")
+
+    normalized = []
+    remaining_index = None
+
+    for index, block_size in enumerate(block_sizes):
+        if block_size is None or (isinstance(block_size, (int, np.integer)) and int(block_size) == -1):
+            if remaining_index is not None:
+                raise ValueError("Only one 'remaining modes' sentinel is allowed")
+            if index != len(block_sizes) - 1:
+                raise ValueError("The 'remaining modes' sentinel must be the last block")
+            remaining_index = index
+            normalized.append(None)
+            continue
+
+        block_size = int(block_size)
+        if block_size <= 0:
+            raise ValueError("gain_block_sizes must contain positive integers or a single trailing null/-1")
+
+        normalized.append(block_size)
+
+    explicit_sum = sum(size for size in normalized if size is not None)
+
+    if remaining_index is None:
+        if explicit_sum != int(actuators_number):
+            raise ValueError(
+                f"gain_block_sizes sums to {explicit_sum}, but n_modes={int(actuators_number)}"
+            )
+        return normalized
+
+    remaining_modes = int(actuators_number) - explicit_sum
+    if remaining_modes <= 0:
+        raise ValueError(
+            f"gain_block_sizes leaves no remaining modes: explicit sum={explicit_sum}, "
+            f"n_modes={int(actuators_number)}"
+        )
+
+    normalized[remaining_index] = remaining_modes
+    return normalized
+
+
+def optimize_gain_blocks(
+    gain_min,
+    gain_max,
+    omega_temp_freq_interval,
+    t_freqs,
+    f,
+    t_0,
+    plant_num,
+    plant_den,
+    telescope_diameter,
+    fried_parameter,
+    excess_noise_factor,
+    sky_background,
+    dark_current,
+    readout_noise,
+    photon_flux,
+    frame_rate,
+    magnitude,
+    n_subaperture,
+    collecting_area,
+    slope_computer_weights,
+    fitting_coeff,
+    alpha,
+    seeing,
+    modulation_radius,
+    wind_speed,
+    maximum_radial_order_corrected,
+    reconstruction_matrix_path,
+    psd_turbulence,
+    psd_windshake,
+    sigma_slopes_path,
+    c_optg,
+    actuators_number,
+    gain_block_sizes,
+    verbose=False,
+    verbose_flux=False,
+):
+    """
+    Optimize one scalar gain per block using precomputed modal variance grid.
+    
+    Computes modal variance grid ONCE for all modes and gain values, then
+    optimizes each block by simple summation of its modal variances.
+    This is significantly more efficient than the previous approach.
+    """
+    block_sizes = normalize_gain_block_sizes(gain_block_sizes, actuators_number)
+
+    # Compute modal variance grid ONCE for all modes and all gain values
+    gain_values, modal_variances = _compute_modal_variance_grid(
+        gain_min, gain_max,
+        omega_temp_freq_interval, t_freqs, f,
+        t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
+        excess_noise_factor, sky_background, dark_current, readout_noise,
+        photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+        slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
+        wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
+        psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
+        actuators_number,
+        verbose_flux=verbose_flux
+    )
+
+    gain_vector = np.zeros(actuators_number, dtype=float)
+    sweep_results = []
+
+    start_mode = 0
+    for block_index, block_size in enumerate(block_sizes):
+        stop_mode = start_mode + block_size
+        modes_to_optimize = list(range(start_mode, stop_mode))
+
+        # Aggregate modal variances for this block: sum over the modes in the block
+        block_variances = np.sum(modal_variances[modes_to_optimize, :], axis=0)
+        
+        # Find best gain for this block
+        idx_min = np.argmin(block_variances)
+        best_gain = gain_values[idx_min]
+
+        gain_vector[modes_to_optimize] = best_gain
+        sweep_results.append({
+            "label": f"Block {block_index + 1} (modes {start_mode}-{stop_mode - 1})",
+            "modes": modes_to_optimize,
+            "best_gain": best_gain,
+            "gain_values": np.asarray(gain_values, dtype=float),
+            "variances": np.asarray(block_variances, dtype=float),
+        })
+
+        start_mode = stop_mode
+
+    return gain_vector, sweep_results
 
 
 # Function to interpolate a 1D vector to a new set of points, setting values outside the original range to 0.

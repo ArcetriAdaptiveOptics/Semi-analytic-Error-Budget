@@ -352,13 +352,13 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     print("\n===== CLOSED-LOOP SUMMARY =====")
     print(f"N_modes: {n_modes}")
     print(f"N_frequencies: {frequencies.size}")
-    print(f"Fitting total variance [nm^2]:      {fit_total:.6e}")
-    print(f"Temporal total variance [nm^2]:     {temp_total:.6e}")
-    print(f"Aliasing total variance [nm^2]:     {alias_total:.6e}")
-    print(f"Measurement total variance [nm^2]:  {meas_total:.6e}")
+    print(f"Fitting total variance [nm^2], [nm]:      {fit_total:.6e}, {np.sqrt(fit_total):.3f} nm")
+    print(f"Temporal total variance [nm^2], [nm]:     {temp_total:.6e}, {np.sqrt(temp_total):.3f} nm")
     if vibr_total is not None:
-        print(f"Vibration total variance [nm^2]:   {vibr_total:.6e} (separate term)")
-    print(f"Total output variance [nm^2]:       {total_variance_sum:.6e}")
+        print(f"Vibration total variance [nm^2], [nm]:   {vibr_total:.6e}, {np.sqrt(vibr_total):.3f} nm (separate term)")
+    print(f"Aliasing total variance [nm^2], [nm]:     {alias_total:.6e}, {np.sqrt(alias_total):.3f} nm")
+    print(f"Measurement total variance [nm^2], [nm]:  {meas_total:.6e}, {np.sqrt(meas_total):.3f} nm")
+    print(f"Total output variance [nm^2], [nm]:       {total_variance_sum:.6e}, {np.sqrt(total_variance_sum):.3f} nm")
 
     if modes_to_plot is None:
         modes_to_plot = [0, n_modes // 2, n_modes - 1]
@@ -693,15 +693,25 @@ def plot_psd_vibr_soul (file_path_wind):
 # Function to plot the total residual variance of the system as a function 
 # of the gain, showing separate curves for orthogonal blocks (e.g. Tip-Tilt vs Higher Orders)
 
-def plot_gain_optimization_sweep(gain_vals_TT, var_TT, gain_vals_HO=None, var_HO=None):
+def plot_gain_optimization_sweep(gain_vals_TT=None, var_TT=None, gain_vals_HO=None,
+                                 var_HO=None, gain_sweeps=None):
     
     plt.figure(figsize=(9, 6))
-    
-    plt.plot(gain_vals_TT, var_TT, linewidth=2, label='Tip-Tilt Block (Modes 0-1)')
-    
-    # Se abbiamo calcolato anche gli alti ordini, li disegniamo
-    if gain_vals_HO is not None and var_HO is not None:
-        plt.plot(gain_vals_HO, var_HO, linewidth=2, label='Higher Orders Block')
+
+    if gain_sweeps is not None:
+        for sweep in gain_sweeps:
+            plt.plot(
+                sweep["gain_values"],
+                sweep["variances"],
+                linewidth=2,
+                label=sweep.get("label", "Gain block"),
+            )
+    else:
+        if gain_vals_TT is not None and var_TT is not None:
+            plt.plot(gain_vals_TT, var_TT, linewidth=2, label='Tip-Tilt Block (Modes 0-1)')
+
+        if gain_vals_HO is not None and var_HO is not None:
+            plt.plot(gain_vals_HO, var_HO, linewidth=2, label='Higher Orders Block')
         
     plt.yscale('log')
     plt.xlabel('Integrator Gain')

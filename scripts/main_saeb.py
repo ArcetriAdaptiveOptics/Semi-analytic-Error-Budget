@@ -13,7 +13,6 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from scipy import integrate
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -36,7 +35,11 @@ from src.Functions import total_variance
 from src.Functions import turbulence_psd
 from src.Functions import vibration_variance
 from src.Functions import _integrate_modal_psd
+from src.Functions import gain_maximum_from_total_delay
+from src.Functions import optimize_gain_blocks
+from src.Functions import resolve_gain_mode
 from src.plots import summary_display
+from src.plots import plot_gain_optimization_sweep
 from src.config_utils import resolve_binning_config
 
 
@@ -149,7 +152,7 @@ def run(yaml_file):
     control = param['control']
     t_0 = control['sampling_time']
     total_delay = control['total_delay']
-    gain_ = _build_gain_vector(control, n_actuators)
+    gain_mode = resolve_gain_mode(control)
     modulation_radius = param['wavefront_sensor']['modulation_radius']
     maximum_rad_order_corr = radial_order_from_n_modes(n_actuators)
 
@@ -172,14 +175,14 @@ def run(yaml_file):
     collecting_area = param['telescope']['collect_area']
     x_pixel = control['slope_computer_weights']
 
-    system = param['system']['name']
-
     display_cfg = param.get('display', {})
     display = bool(display_cfg.get('enabled', True))
     summary_modes_to_plot = display_cfg.get('summary_modes_to_plot', None)
 
     if summary_modes_to_plot is not None and not isinstance(summary_modes_to_plot, (list, tuple, np.ndarray)):
         summary_modes_to_plot = None
+
+    gain_sweeps = None
 
     freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1)
 
@@ -213,9 +216,59 @@ def run(yaml_file):
             modulation_radii=(0.0, 4.0),
         )
 
-
     plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
     plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
+
+    gain_block_sizes = control.get('gain_block_sizes', control.get('gain_blocks', None))
+
+    if gain_mode == 'block_optimization':
+        if control.get('gain_value') is not None or control.get('gain_vector') is not None:
+            raise ValueError("gain_block_sizes cannot be combined with gain_value or gain_vector")
+
+        gain_maximum = gain_maximum_from_total_delay(total_delay)
+        gain_, gain_sweeps = optimize_gain_blocks(
+            control['gain_min'],
+            gain_maximum,
+            omega_temporal_freqs,
+            temporal_freqs,
+            freq,
+            t_0,
+            plant_num,
+            plant_den,
+            telescope_diameter,
+            fried_param,
+            F_excess_noise,
+            sky_background,
+            dark_current,
+            readout_noise,
+            phot_flux,
+            frame_rate,
+            magnitudo,
+            n_subapert,
+            collecting_area,
+            x_pixel,
+            fitting_coeff,
+            alpha_,
+            seeing_,
+            modulation_radius,
+            wind_speed,
+            maximum_rad_order_corr,
+            file_path_R1,
+            PSD_atmosf,
+            PSD_wind_vib,
+            file_sigma_slope,
+            c_optg,
+            n_actuators,
+            gain_block_sizes,
+            verbose=False,
+        )
+    elif gain_mode == 'fixed':
+        gain_ = _build_gain_vector(control, n_actuators)
+    else:
+        raise ValueError(
+            "main_saeb.py does not support legacy gain sweeps. Set gain_mode: fixed "
+            "or gain_mode: block_optimization."
+        )
 
     H_r_temp, H_n_meas = build_transfer_function(
         omega_temporal_freqs,
@@ -301,6 +354,9 @@ def run(yaml_file):
                     PSD_input_alias=PSD_in_alias, PSD_input_meas=PSD_in_meas,
                     var_vibr_modes=var_vibr_modes, PSD_out_vibr=PSD_out_vibr,
                     modes_to_plot=summary_modes_to_plot)
+
+    if gain_sweeps is not None:
+        plot_gain_optimization_sweep(gain_sweeps=gain_sweeps)
 
 
 def main():

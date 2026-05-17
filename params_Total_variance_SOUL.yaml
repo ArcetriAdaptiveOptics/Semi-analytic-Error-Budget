@@ -128,9 +128,10 @@ control:
   # Weights on the 4 pyramid pixels used by the slope computer.
   # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
   slope_computer_weights: [1, 1, 1, 1]
-  # Gain: set gain_n: 1 and gain_min for a single uniform gain for all modes
+  # Gain policy: block_optimization means one optimized gain per block.
+  gain_mode: block_optimization
   gain_min: 0.01
-  gain_n: 1
+  gain_block_sizes: [2, null] # null means "all remaining modes"
   # Total delay (WFS + RTC + DM) in [s]
   total_delay: 3
   # Binning

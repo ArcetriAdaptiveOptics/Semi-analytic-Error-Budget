@@ -29,6 +29,9 @@ from src.Functions import PSD_conversion
 from src.Functions import find_best_gain
 from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain
+from src.Functions import gain_maximum_from_total_delay
+from src.Functions import optimize_gain_blocks
+from src.Functions import resolve_gain_mode
 
 from src.plots import plot_gain_optimization_sweep
 from src.plots import plot_all_PSD
@@ -119,8 +122,10 @@ g_maximum_mapping = {
     4: 0.4
 }
 gain_maximum = g_maximum_mapping.get(total_delay)
-gain_number = param['control']['gain_n']
+gain_number = param['control'].get('gain_n', None)
 gain_value = param['control'].get('gain_value', None)
+gain_block_sizes = param['control'].get('gain_block_sizes', param['control'].get('gain_blocks', None))
+gain_mode = resolve_gain_mode(param['control'])
 bin_value = param['control']['bin']
  
 modulation_radius = param['wavefront_sensor']['modulation_radius']
@@ -181,7 +186,26 @@ plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
 # GAIN CONFIGURATION AND OPTIMIZATION
 # -----------------------------------------------------------------------------
 
-if gain_value is not None:
+gain_sweeps = None
+
+if gain_mode == 'block_optimization':
+    if gain_value is not None:
+        raise ValueError("gain_block_sizes cannot be combined with gain_value")
+
+    gain_maximum = gain_maximum_from_total_delay(total_delay)
+    gain_, gain_sweeps = optimize_gain_blocks(
+        gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
+        t_0, plant_num, plant_den, telescope_diameter, fried_param,
+        F_excess_noise, sky_background, dark_current, readout_noise,
+        phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+        x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
+        wind_speed, maximum_radial_order, file_path_R1,
+        PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
+        actuators_number=n_actuators, gain_block_sizes=gain_block_sizes,
+        verbose=False,
+    )
+
+elif gain_mode == 'fixed' and gain_value is not None:
     # Use explicitly provided gain values from the YAML file
     gain_value_array = np.asarray(gain_value, dtype=float).ravel()
     gain_number_array = np.asarray(gain_number, dtype=int).ravel()
@@ -195,7 +219,7 @@ if gain_value is not None:
         ])
     else:
         raise ValueError("gain_value and gain_n must have the same length")
-else:
+elif gain_mode == 'legacy_sweep':
     if gain_number == 1:
         
         # ---------------------------------------------------------------------
@@ -207,7 +231,7 @@ else:
         modes_TT = [0, 1] if n_actuators > 1 else [0]
         
         print("\n--- Tip-Tilt Gain Optimization ---")
-        # Catturiamo i 3 output
+        # Capture the 3 outputs for the tip-tilt optimization
         best_gain_TT, gain_vals_TT, var_TT = find_best_gain(
             gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
             t_0, plant_num, plant_den, telescope_diameter, fried_param,
@@ -228,7 +252,7 @@ else:
             modes_HO = list(range(2, n_actuators))
             
             print("\n--- Higher Orders Gain Optimization ---")
-            # Catturiamo i 3 output
+            # Capture the 3 outputs for the higher orders optimization
             best_gain_HO, gain_vals_HO, var_HO = find_best_gain(
                 gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
                 t_0, plant_num, plant_den, telescope_diameter, fried_param,
@@ -251,6 +275,8 @@ else:
         gain_ = np.linspace(gain_minimum, gain_maximum, gain_number)
     else:
         raise ValueError("Set gain_n to 1 or n_modes, or provide gain_value")
+else:
+    raise ValueError("Unsupported gain configuration: use gain_mode fixed, block_optimization, or legacy_sweep")
 
 if gain_.size != n_actuators:
     raise ValueError(f"Gain vector length {gain_.size} does not match n_modes={n_actuators}")
@@ -363,11 +389,14 @@ if display:
                            var_fit, omega_temporal_freqs, n_actuators)
 
     # 1. Plot Gain Sweep Optimization
-    if gain_number == 1:
+    if gain_sweeps is None and gain_number == 1:
         if n_actuators <= 2:
             plot_gain_optimization_sweep(gain_vals_TT, var_TT)
         else:
             plot_gain_optimization_sweep(gain_vals_TT, var_TT, gain_vals_HO, var_HO)
+
+    if gain_sweeps is not None:
+        plot_gain_optimization_sweep(gain_sweeps=gain_sweeps)
 
     plot_psd_vibr_soul (file_path_wind)
 

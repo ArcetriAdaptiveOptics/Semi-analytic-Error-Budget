@@ -14,13 +14,13 @@ atmosphere:
 
 wavefront_sensor:
   # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
-  value_for_F_excess_noise: 1
+  value_for_F_excess_noise: 2
   # Sky background in [photo-electrons]
   sky_backgr: 0
   # Dark current in [photo-electrons]
   dark_curr: 0
   # Readout noise in [photo-electrons]
-  noise_readout: 5
+  noise_readout: 0.2
   # Number of sub apertures on the diameter of the telescope
   number_of_sub: 100
   # Modulation radius [lambda/D]
@@ -66,16 +66,19 @@ frequency_ranges:
 
 control:
   # Number of corrected modes
-  n_modes: 300
+  n_modes: 4000
   # Sampling time in [s] — also sets the Nyquist frequency
-  sampling_time: 0.001
+  sampling_time: 0.002
   # Weights on the 4 pyramid pixels used by the slope computer.
   # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
   slope_computer_weights: [1, 0, 0, 0]
-  # Gain: set gain_n: 1 and gain_min for a single uniform gain for all modes
+  # Gain policy: block_optimization means one optimized gain per block.
+  gain_mode: block_optimization
   gain_min: 0.01
-  gain_n: 1
-  # Total delay (WFS + RTC + DM) in [s]
+  # Optional block-wise gain optimization. Each value is the number of modes
+  # optimized together with one shared gain.
+  gain_block_sizes: [2, 98, 900, 1000, 1000, 1000]
+  # Total delay (WFS + RTC + DM) in [frames]
   total_delay: 3
   # Binning
   bin: 1  
