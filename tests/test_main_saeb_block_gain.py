@@ -28,7 +28,6 @@ class TestMainSaebBlockOptimization(unittest.TestCase):
             "control": {
                 "n_modes": 4,
                 "sampling_time": 0.01,
-                "total_delay": 3,
                 "gain_mode": "block_optimization",
                 "gain_min": 0.1,
                 "gain_block_sizes": [2, None],
@@ -63,11 +62,9 @@ class TestMainSaebBlockOptimization(unittest.TestCase):
                 "optical_gain_models": ["og0.fits", "og4.fits"],
             },
             "plant": {
-                "d_1": [1.0],
-                "d_3": [1.0],
-                "n_1": [1.0],
-                "n_2": [1.0],
-                "n_3": [1.0],
+                "numerator": [1.0],
+                "denominator": [1.0],
+                "total_delay": 3,
             },
             "frequency_ranges": {
                 "temporal_freqs_min": -3,
@@ -99,11 +96,15 @@ class TestMainSaebBlockOptimization(unittest.TestCase):
                 {"label": "Block 2", "gain_values": np.array([0.1, 0.2]), "variances": np.array([2.0, 1.0])},
             ]
 
+        def fake_funct_d2(total_delay):
+            self.assertEqual(total_delay, 3)
+            return np.array([1.0])
+
         with patch.object(main_saeb, "load_parameters", side_effect=fake_load_parameters), \
              patch.object(main_saeb, "resolve_binning_config", side_effect=lambda param: param), \
              patch.object(main_saeb, "load_PSD_windshake", side_effect=fake_load_psd_windshake), \
              patch.object(main_saeb, "compute_optical_gain", return_value=np.ones(4)), \
-             patch.object(main_saeb, "funct_d2", return_value=np.array([1.0])), \
+             patch.object(main_saeb, "funct_d2", side_effect=fake_funct_d2), \
              patch.object(main_saeb, "turbulence_psd", return_value=np.ones((4, 4))), \
              patch.object(main_saeb, "build_transfer_function", return_value=(np.ones((4, 4)), np.ones((4, 4)))), \
              patch.object(main_saeb, "fitting_variance", return_value=1.0), \

@@ -143,15 +143,13 @@ def run(yaml_file):
     file_sigma_slope = param['data']['sigma_slopes']
     file_optg_cube = param['data'].get('optical_gain_cube', None)
 
-    d1 = param['plant']['d_1']
-    d3 = param['plant']['d_3']
-    n1 = param['plant']['n_1']
-    n2 = param['plant']['n_2']
-    n3 = param['plant']['n_3']
+    plant = param['plant']
+    plant_num = np.asarray(plant['numerator'])
+    plant_den_base = np.asarray(plant['denominator'])
 
     control = param['control']
     t_0 = control['sampling_time']
-    total_delay = control['total_delay']
+    total_delay = plant['total_delay']
     gain_mode = resolve_gain_mode(control)
     modulation_radius = param['wavefront_sensor']['modulation_radius']
     maximum_rad_order_corr = radial_order_from_n_modes(n_actuators)
@@ -196,8 +194,6 @@ def run(yaml_file):
                                 layers_altitude, wind_speed, wind_direction,
                                 spatial_freqs, temporal_freqs, n_modes=n_actuators)
 
-    d2 = funct_d2(total_delay)
-
     c_optg = 0
     if file_optg is None and file_optg_cube is not None:
         c_optg = final_soul_optical_gain(
@@ -216,8 +212,7 @@ def run(yaml_file):
             modulation_radii=(0.0, 4.0),
         )
 
-    plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
-    plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
+    plant_den = np.polymul(plant_den_base, funct_d2(total_delay))
 
     gain_block_sizes = control.get('gain_block_sizes', control.get('gain_blocks', None))
 

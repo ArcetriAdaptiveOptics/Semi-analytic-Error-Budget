@@ -43,16 +43,12 @@ data:
   sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
 
 plant:
-  # Denominator polynomial coefficients of the W transfer function
-  d_1: [1]
-  # Denominator polynomial coefficients of the M transfer function
-  d_3: [1]
-  # Numerator polynomial coefficients of the W transfer function
-  n_1: [1]
-  # Numerator polynomial coefficients of the R transfer function
-  n_2: [1]
-  # Numerator polynomial coefficients of the M transfer function
-  n_3: [1]
+  # Numerator polynomial coefficients of the plant transfer function
+  numerator: [1]
+  # Denominator polynomial coefficients of the plant transfer function
+  denominator: [1]
+  # Total delay (WFS + RTC + DM) in [frames]
+  total_delay: 3
 
 frequency_ranges:
   # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
@@ -71,8 +67,6 @@ control:
   # Fixed gain per group of modes: gain_value and gain_n must be lists of the same length
   gain_value: [0.5]
   gain_n:     [4000]
-  # Total delay (WFS + RTC + DM) in [s]
-  total_delay: 3
 
 system:
   # ANDES or SOUL

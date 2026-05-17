@@ -99,14 +99,12 @@ if file_optg is not None and file_optg_cube is not None:
                        " Please provide only one of them.")
 
 
-d1 = param['plant']['d_1']
-d3 = param['plant']['d_3']
-n1 = param['plant']['n_1']
-n2 = param['plant']['n_2']
-n3 = param['plant']['n_3']
+plant = param['plant']
+plant_num = np.asarray(plant['numerator'])
+plant_den_base = np.asarray(plant['denominator'])
 
 t_0 = param['control']['sampling_time']
-total_delay = param['control']['total_delay']
+total_delay = plant['total_delay']
 gain_minimum = param['control']['gain_min']
 
 spatial_freqs = np.logspace(-4, 4, 100)
@@ -178,9 +176,7 @@ PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs,
                             n_modes=n_actuators)
 
-d2 = funct_d2(total_delay)
-plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
-plant_den = np.polymul(np.polymul(np.asarray(d1), d2), np.asarray(d3))
+plant_den = np.polymul(plant_den_base, funct_d2(total_delay))
 
 # -----------------------------------------------------------------------------
 # GAIN CONFIGURATION AND OPTIMIZATION

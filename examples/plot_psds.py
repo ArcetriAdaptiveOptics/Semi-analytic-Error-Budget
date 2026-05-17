@@ -20,7 +20,7 @@ from src.Functions import (
 )
 
 
-def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
+def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True, gain_value=None):
     print(f"\nGenerating PSD plot for Mode {mode_index}...")
 
     # 1. Load parameters
@@ -32,11 +32,15 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     aperture_center = [0, 0, 0]
 
     L0 = param['atmosphere']['outer_scale']
-    layers_altitude = 0.0
-    wind_direction = 0.0
     wind_speed = param['atmosphere']['wind_speed']
     seeing = param['atmosphere']['seeing']
     r0 = seeing_to_r0(seeing)
+    layers_altitude = 0.0
+    wind_direction = 0.0
+
+    plant = param['plant']
+    plant_num = np.asarray(plant['numerator'])
+    plant_den_base = np.asarray(plant['denominator'])
 
     F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
     sky_background = param['wavefront_sensor']['sky_backgr']
@@ -48,20 +52,16 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     file_mod4 = param['data']['optical_gain_models'][1]
     sigma_slopes_path = param['data']['sigma_slopes']
 
-    d1 = param['plant']['d_1']
-    d3 = param['plant']['d_3']
-    n1 = param['plant']['n_1']
-    n2 = param['plant']['n_2']
-    n3 = param['plant']['n_3']
-
     t_0 = param['control']['sampling_time']
     frame_rate = 1.0 / t_0
-    temporal_freqs = np.logspace(-3, np.log10(frame_rate / 2.0), 1000)
+    temporal_freqs = np.logspace(param['frequency_ranges']['temporal_freqs_min'],
+                                 np.log10(frame_rate / 2.0),
+                                 param['frequency_ranges']['temporal_freqs_n'])
     omega = 2 * np.pi * temporal_freqs
 
-    spatial_freqs = np.logspace(-4, 4, 300)
+    spatial_freqs = np.logspace(-4, 4, 100)
 
-    T_tot = param['control']['total_delay']
+    T_tot = plant['total_delay']
     modulation_radius = param['wavefront_sensor']['modulation_radius']
     maximum_radial_order = radial_order_from_n_modes(n_actuators)
     alpha_ = DEFAULT_ALIASING_ALPHA
@@ -72,13 +72,15 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     collecting_area = param['telescope']['collect_area']
     x_pixel = param['control']['slope_computer_weights']
 
-    gain_value = param['control'].get('gain_value')
     if gain_value is not None:
-        gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
+        print(f"Using user-provided gain value: {gain_value}")
+        gain_array = np.full(n_actuators, float(gain_value))
     else:
-        gain_array = np.full(n_actuators, float(param['control']['gain_min']))
-
-    d2 = funct_d2(T_tot)
+        gain_value = param['control'].get('gain_value')
+        if gain_value is not None:
+            gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
+        else:
+            gain_array = np.full(n_actuators, float(param['control']['gain_min']))
 
     # 2. Generate Atmospheric Input
     PSD_atmosf = turbulence_psd(0, 0, aperture_radius, aperture_center,
@@ -89,8 +91,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
     PSD_vibration_zeros = np.zeros_like(PSD_atmosf)
 
     # 3. Build Transfer Functions
-    plant_num = np.polymul(np.polymul(np.asarray(n1), np.asarray(n2)), np.asarray(n3))
-    plant_den = np.polymul(np.polymul(np.asarray(d1), np.asarray(d2)), np.asarray(d3))
+    plant_den = np.polymul(plant_den_base, funct_d2(T_tot))
     H_r, H_n = build_transfer_function(
         omega,
         t_0,
@@ -226,4 +227,4 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True):
 
 
 if __name__ == "__main__":
-    plot_system_psds(mode_index=0, plot_inputs=True)
+    plot_system_psds(mode_index=0, plot_inputs=True, gain_value=0.2)

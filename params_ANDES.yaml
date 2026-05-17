@@ -47,20 +47,16 @@ data:
   modal_psd_alias:  "src/file_fits/ANDES/modal_psd_aliasing.fits"
 
 plant:
-  # Denominator polynomial coefficients of the W transfer function
-  d_1: [1]
-  # Denominator polynomial coefficients of the M transfer function
-  d_3: [1]
-  # Numerator polynomial coefficients of the W transfer function
-  n_1: [1]
-  # Numerator polynomial coefficients of the R transfer function
-  n_2: [1]
-  # Numerator polynomial coefficients of the M transfer function
-  n_3: [1]
+  # Numerator polynomial coefficients of the plant transfer function
+  numerator: [1]
+  # Denominator polynomial coefficients of the plant transfer function
+  denominator: [1]
+  # Total delay (WFS + RTC + DM) in [frames]
+  total_delay: 3
 
 frequency_ranges:
   # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
-  temporal_freqs_min: -3
+  temporal_freqs_min: -2
   temporal_freqs_n: 1000
   # Note: maximum is retrieved from sampling_time
 
@@ -78,8 +74,6 @@ control:
   # Optional block-wise gain optimization. Each value is the number of modes
   # optimized together with one shared gain.
   gain_block_sizes: [2, 98, 900, 1000, 1000, 1000]
-  # Total delay (WFS + RTC + DM) in [frames]
-  total_delay: 3
   # Binning
   bin: 1  
 
