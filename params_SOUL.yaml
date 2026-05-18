@@ -27,8 +27,8 @@ wavefront_sensor:
   modal_radius_soul: [0.0, 3.0]
 
 guide_star:
-  # Number of photons per second per m^2
-  flux_photons: 5.9e9
+  # Number of photons per second per m^2 including total throughput
+  flux_photons: 6e9
   # Guide star magnitude
   magn: 7.5
 
@@ -105,7 +105,7 @@ plant:
   # Denominator polynomial coefficients of the plant transfer function
   denominator: [1]
   # Total delay (WFS + RTC + DM) in [frames]
-  total_delay: 3
+  total_delay: 2
 
 frequency_ranges:
   # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
