@@ -36,7 +36,6 @@ class TestMainSaebBlockOptimization(unittest.TestCase):
             },
             "telescope": {
                 "telescope_diam": 8.0,
-                "collect_area": 1.0,
             },
             "atmosphere": {
                 "outer_scale": 25.0,
