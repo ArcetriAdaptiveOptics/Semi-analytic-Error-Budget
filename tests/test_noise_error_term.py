@@ -132,9 +132,8 @@ def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay):
     # Invert nph to photon_flux for the SA function
     D = 8.222
     n_sub = 40
-    area_sub = np.pi * ((D / n_sub) / 2.0)**2
-    collecting_area = 1.0
-    photon_flux = nph * (collecting_area / area_sub) * _FRAME_RATE
+    area_sub = (D / n_sub) ** 2
+    photon_flux = nph * (1.0 / area_sub) * _FRAME_RATE
 
     slope_var = compute_slope_noise_variance(
         F_excess=1.0,
@@ -147,7 +146,6 @@ def _sa_wfe_nm(n_modes, nph, ron_var, p_coeff, omega, t0, gain, delay):
         frame_rate=_FRAME_RATE,
         magnitudo=0.0,
         n_subaperture=n_sub,
-        collecting_area=collecting_area
     )
 
     sigma2_w = slope_var * p_coeff[:n_modes]
@@ -197,7 +195,7 @@ class TestPyramidNoiseVarianceFormula(unittest.TestCase):
         SA slope noise variance wrapper around the actual implementation.
         ron_var = ron² (RON variance in e-²).
         """
-        area_sub = np.pi * ((self.D / self.n_sub) / 2.0)**2
+        area_sub = (self.D / self.n_sub) ** 2
         photon_flux = nph * (1.0 / area_sub) * 1000.0
 
         return compute_slope_noise_variance(
@@ -211,7 +209,6 @@ class TestPyramidNoiseVarianceFormula(unittest.TestCase):
             frame_rate=1000.0,
             magnitudo=0.0,
             n_subaperture=self.n_sub,
-            collecting_area=1.0
         )
 
     # ── tests ─────────────────────────────────────────────────────────────
@@ -575,7 +572,7 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
         # Use the real function to get the exact slope var
         D = 8.222
         n_sub = 40
-        area_sub = np.pi * ((D / n_sub) / 2.0)**2
+        area_sub = (D / n_sub) ** 2
         photon_flux = _NPH * (1.0 / area_sub) * _FRAME_RATE
 
         slope_var_sa = compute_slope_noise_variance(
@@ -589,7 +586,6 @@ class TestNoisePSDCrossComparison(unittest.TestCase):
             frame_rate=_FRAME_RATE,
             magnitudo=0.0,
             n_subaperture=n_sub,
-            collecting_area=1.0
         )
 
         # Consider ALL modes from the FITS for a fair comparison
@@ -665,11 +661,10 @@ class TestSlopeNoiseVariance(unittest.TestCase):
         # --- 2. Fictitious setup to force n_phot_pix in SA ---
         D = 8.0
         n_sub = 40
-        area_sub = np.pi * ((D / n_sub) / 2.0)**2
-        collecting_area = 1.0
+        area_sub = (D / n_sub) ** 2
 
         # Invert the SA formula to get nph_total photons per subaperture
-        photon_flux = nph_total * (collecting_area / area_sub)
+        photon_flux = nph_total * (1.0 / area_sub)
         frame_rate = 1.0
         magnitudo = 0.0
 
@@ -688,7 +683,6 @@ class TestSlopeNoiseVariance(unittest.TestCase):
             frame_rate=frame_rate,
             magnitudo=magnitudo,
             n_subaperture=n_sub,
-            collecting_area=collecting_area
         )
 
         # --- 4. Theoretical calculation (Vérinaud 2004 / Agapito Eq. 12-14) ---

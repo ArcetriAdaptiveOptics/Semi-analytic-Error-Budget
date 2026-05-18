@@ -1,8 +1,6 @@
 telescope:
   # Primary mirror diameter in [m]
   telescope_diam: 8.222
-  # Collecting area of ELT in [m^2]
-  collect_area: 1000
 
 atmosphere:
   # Outer scale in [m]
@@ -14,13 +12,13 @@ atmosphere:
 
 wavefront_sensor:
   # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
-  value_for_F_excess_noise: 1
+  value_for_F_excess_noise: 2
   # Sky background in [photo-electrons]
   sky_backgr: 0
   # Dark current in [photo-electrons]
   dark_curr: 0
   # Readout noise in [photo-electrons]
-  noise_readout: 5
+  noise_readout: 0.2
   # Number of sub apertures on the diameter of the telescope
   number_of_sub: 0 # NOTE: defined in binning_configs
   # Modulation radius [lambda/D]
@@ -29,10 +27,10 @@ wavefront_sensor:
   modal_radius_soul: [0.0, 3.0]
 
 guide_star:
-  # Number of photons per second per collecting area
-  flux_photons: 9.0e12
+  # Number of photons per second per m^2
+  flux_photons: 5.9e9
   # Guide star magnitude
-  magn: 16.5
+  magn: 8.5
 
 data:
   # Path to reconstruction matrix or noise propagation coefficients vector
@@ -120,7 +118,7 @@ control:
   # Number of corrected modes
   n_modes: 0 # NOTE: defined in binning_configs
   # Sampling time in [s] — also sets the Nyquist frequency
-  sampling_time: 0.005
+  sampling_time: 0.000667
   # Weights on the 4 pyramid pixels used by the slope computer.
   # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
   slope_computer_weights: [1, 1, 1, 1]
@@ -129,7 +127,7 @@ control:
   gain_min: 0.01
   gain_block_sizes: [2, null] # null means "all remaining modes"
   # Binning
-  bin: 4
+  bin: 1
 
 display:
   # Enable/disable all visualization blocks

@@ -170,7 +170,6 @@ def run(yaml_file):
     frame_rate = 1.0 / t_0
     magnitudo = param['guide_star']['magn']
     n_subapert = param['wavefront_sensor']['number_of_sub']
-    collecting_area = param['telescope']['collect_area']
     x_pixel = control['slope_computer_weights']
 
     display_cfg = param.get('display', {})
@@ -240,7 +239,6 @@ def run(yaml_file):
             frame_rate,
             magnitudo,
             n_subapert,
-            collecting_area,
             x_pixel,
             fitting_coeff,
             alpha_,
@@ -322,7 +320,6 @@ def run(yaml_file):
         frame_rate,
         magnitudo,
         n_subapert,
-        collecting_area,
         file_path_R1,
         H_n_meas,
         n_actuators,

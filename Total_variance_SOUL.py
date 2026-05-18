@@ -123,7 +123,6 @@ phot_flux = float(param['guide_star']['flux_photons'])
 frame_rate = 1.0 / t_0
 magnitude = param['guide_star']['magn']
 n_subapert = param['wavefront_sensor']['number_of_sub']
-collecting_area = param['telescope']['collect_area']
 x_pixel = param['control']['slope_computer_weights']
 
 display = param['display']['enabled']
@@ -187,7 +186,7 @@ if gain_mode == 'block_optimization':
         gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
         t_0, plant_num, plant_den, telescope_diameter, fried_param,
         F_excess_noise, sky_background, dark_current, readout_noise,
-        phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+        phot_flux, frame_rate, magnitude, n_subapert,
         x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
         wind_speed, maximum_radial_order, file_path_R1,
         PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
@@ -226,7 +225,7 @@ elif gain_mode == 'legacy_sweep':
             gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
             t_0, plant_num, plant_den, telescope_diameter, fried_param,
             F_excess_noise, sky_background, dark_current, readout_noise,
-            phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+            phot_flux, frame_rate, magnitude, n_subapert,
             x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
             wind_speed, maximum_radial_order, file_path_R1,
             PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
@@ -247,7 +246,7 @@ elif gain_mode == 'legacy_sweep':
                 gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
                 t_0, plant_num, plant_den, telescope_diameter, fried_param,
                 F_excess_noise, sky_background, dark_current, readout_noise,
-                phot_flux, frame_rate, magnitude, n_subapert, collecting_area,
+                phot_flux, frame_rate, magnitude, n_subapert,
                 x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
                 wind_speed, maximum_radial_order, file_path_R1,
                 PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
@@ -357,7 +356,6 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
     frame_rate,
     magnitude,
     n_subapert,
-    collecting_area,
     file_path_R1,
     H_n_meas,
     n_actuators,
@@ -424,7 +422,7 @@ if display:
     # plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
     #                       PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
     #                       maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
-    #                       phot_flux, frame_rate, magnitude, n_subapert, collecting_area, temporal_freqs, freq, 
+    #                       phot_flux, frame_rate, magnitude, n_subapert, temporal_freqs, freq,
     #                       file_path_R1, file_sigma_slope)
     
     # if system == "SOUL":

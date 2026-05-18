@@ -39,7 +39,7 @@ from src.Functions import _integrate_modal_psd
 def variance_total_for_test(actuators_number, gain_values, omega_temp_freq_interval, t_freqs, f,
                             t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
                             excess_noise_factor, sky_background, dark_current, readout_noise,
-                            photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                            photon_flux, frame_rate, magnitude, n_subaperture,
                             slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
                             wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
                             psd_turbulence, psd_windshake, sigma_slopes_path):
@@ -108,7 +108,6 @@ def variance_total_for_test(actuators_number, gain_values, omega_temp_freq_inter
             frame_rate,
             magnitude,
             n_subaperture,
-            collecting_area,
             reconstruction_matrix_path,
             H_n_meas,
             actuators_number,
@@ -590,7 +589,7 @@ def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, te
 def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
                            PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
                            maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
-                           photon_flux,frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies, 
+                           photon_flux,frame_rate, magnitudo, n_subaperture, temporal_frequencies, frequencies,
                            file_path_matrix_R, file_path_sigma_slopes):
 
     plant_num = np.polymul(np.polymul(np.asarray(num1), np.asarray(num2)), np.asarray(num3))
@@ -644,7 +643,6 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         frame_rate,
         magnitudo,
         n_subaperture,
-        collecting_area,
         file_path_matrix_R,
         H_n,
         actuators_number,

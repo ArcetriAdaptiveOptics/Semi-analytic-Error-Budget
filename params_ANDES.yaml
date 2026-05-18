@@ -1,8 +1,6 @@
 telescope:
   # Primary mirror diameter in [m]
   telescope_diam: 38.5
-  # Collecting area of ELT in [m^2]
-  collect_area: 1000
 
 atmosphere:
   # Outer scale in [m]
@@ -29,8 +27,8 @@ wavefront_sensor:
   modal_radius_andes: [0.0, 4.0]
   
 guide_star:
-  # Number of photons per second per collecting area
-  flux_photons: 9.0e12
+  # Number of photons per second per m^2
+  flux_photons: 5.9e9
   # Guide star magnitude
   magn: 7.5
 

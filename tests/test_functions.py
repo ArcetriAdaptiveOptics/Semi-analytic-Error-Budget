@@ -423,10 +423,10 @@ class TestFluxForFrameForPixel(unittest.TestCase):
     """flux_for_frame_for_pixel computes the photon count per pixel per frame."""
 
     @staticmethod
-    def _formula(flux, D, fr, mag, n_sub, area):
-        sub_r    = (D / n_sub) / 2
-        sub_area = np.pi * sub_r ** 2
-        return (flux / fr) * (sub_area / area) * 10 ** (-mag / 2.5) / 4
+    def _formula(flux, D, fr, mag, n_sub):
+        sub_side = D / n_sub
+        sub_area = sub_side ** 2
+        return (flux / fr) * sub_area * 10 ** (-mag / 2.5) / 4
 
     def test_matches_analytical_formula(self):
         cases = [
@@ -436,14 +436,14 @@ class TestFluxForFrameForPixel(unittest.TestCase):
         for flux, D, fr, mag, n_sub, area in cases:
             with self.subTest(mag=mag):
                 self.assertAlmostEqual(
-                    flux_for_frame_for_pixel(flux, D, fr, mag, n_sub, area),
-                    self._formula(flux, D, fr, mag, n_sub, area),
+                    flux_for_frame_for_pixel(flux, D, fr, mag, n_sub),
+                    self._formula(flux, D, fr, mag, n_sub),
                     places=10,
                 )
 
     def test_brighter_star_gives_higher_flux(self):
         kw = dict(photon_flux=9e12, telescope_diameter=38.5, frame_rate=1000,
-                  n_subaperture=100, collecting_area=1000)
+                  n_subaperture=100)
         self.assertGreater(
             flux_for_frame_for_pixel(**kw, magnitudo=5),
             flux_for_frame_for_pixel(**kw, magnitudo=10),
@@ -451,8 +451,51 @@ class TestFluxForFrameForPixel(unittest.TestCase):
 
     def test_result_is_positive(self):
         self.assertGreater(
-            flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100, 1000), 0
+            flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100), 0
         )
+
+    def test_can_return_all_flux_components(self):
+        flux = 9e12
+        D = 38.5
+        fr = 1000
+        mag = 7
+        n_sub = 100
+        n_pix = 4
+
+        components = flux_for_frame_for_pixel(
+            flux,
+            D,
+            fr,
+            mag,
+            n_sub,
+            pixels_per_subaperture=n_pix,
+            return_components=True,
+        )
+
+        sub_side = D / n_sub
+        sub_area = sub_side ** 2
+        scale = 10 ** (-mag / 2.5)
+        expected_total = (flux / fr) * (n_sub ** 2) * sub_area * scale
+        expected_sub = (flux / fr) * sub_area * scale
+        expected_pix = expected_sub / n_pix
+
+        self.assertAlmostEqual(components["flux_total_per_frame"], expected_total, places=10)
+        self.assertAlmostEqual(components["flux_per_subaperture_per_frame"], expected_sub, places=10)
+        self.assertAlmostEqual(components["flux_per_pixel_per_frame"], expected_pix, places=10)
+
+    def test_total_flux_consistent_with_subaperture_partition(self):
+        params = dict(
+            photon_flux=9e12,
+            telescope_diameter=38.5,
+            frame_rate=1000,
+            magnitudo=7,
+            n_subaperture=100,
+            return_components=True,
+        )
+
+        components = flux_for_frame_for_pixel(**params)
+        reconstructed_total = components["flux_per_subaperture_per_frame"] * (params["n_subaperture"] ** 2)
+        self.assertAlmostEqual(components["flux_total_per_frame"], reconstructed_total, places=10)
 
 
 # ---------------------------------------------------------------------------
@@ -467,16 +510,16 @@ class TestComputeSlopeNoiseVariance(unittest.TestCase):
         #   pixel_variance = n_phot
         #   slope_var = sum(x_i^2 * n_phot) / (4*n_phot)^2 = sum(x_i^2) / (16*n_phot)
         pixel_pos = np.array([1.0, 0.0, 0.0, 0.0])
-        n_phot = flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100, 1000)
+        n_phot = flux_for_frame_for_pixel(9e12, 38.5, 1000, 7, 100)
         expected = np.sum(pixel_pos ** 2) / n_phot    
         result = compute_slope_noise_variance(
-            1.0, pixel_pos, 0, 0, 0, 9e12, 38.5, 1000, 7, 100, 1000
+            1.0, pixel_pos, 0, 0, 0, 9e12, 38.5, 1000, 7, 100
         )
         self.assertAlmostEqual(result, expected, places=10)
 
     def test_result_is_positive(self):
         result = compute_slope_noise_variance(
-            1.0, [1, 0, 0, 0], 0, 0, 5, 9e12, 38.5, 1000, 7, 100, 1000
+            1.0, [1, 0, 0, 0], 0, 0, 5, 9e12, 38.5, 1000, 7, 100
         )
         self.assertGreater(result, 0)
 
@@ -765,7 +808,7 @@ class TestFindBestGain(unittest.TestCase):
             telescope_diameter=8.0, fried_parameter=0.15,
             excess_noise_factor=1.0, sky_background=0.0, dark_current=0.0, 
             readout_noise=0.0, photon_flux=1000, frame_rate=1000, 
-            magnitude=0.0, n_subaperture=40, collecting_area=50,
+            magnitude=0.0, n_subaperture=40,
             slope_computer_weights=np.array([1.0]), fitting_coeff=0.27, 
             alpha=-17/3, seeing=0.8, modulation_radius=3.0,
             wind_speed=15.0, maximum_radial_order_corrected=10, 

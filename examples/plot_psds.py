@@ -73,7 +73,6 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
     phot_flux = float(param['guide_star']['flux_photons'])
     magnitude = param['guide_star']['magn']
     n_subapert = param['wavefront_sensor']['number_of_sub']
-    collecting_area = param['telescope']['collect_area']
     x_pixel = param['control']['slope_computer_weights']
 
     if gain_value is not None:
@@ -143,7 +142,6 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
         frame_rate=frame_rate,
         magnitudo=magnitude,
         n_subaperture=n_subapert,
-        collecting_area=collecting_area,
         file_path_matrix_R=file_path_R1,
         omega_temp_freq_interval=omega,
         transf_funct=H_n,

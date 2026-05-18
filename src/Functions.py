@@ -1143,31 +1143,44 @@ def aliasing_variance(transf_funct, actuators_number, omega_temp_freq_interval,
 # sub-aperture geometry, and source magnitude.
 
 def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                             n_subaperture, collecting_area, pixels_per_subaperture=4,
-                             verbose_flux=False):
-    
-    flux_per_frame = photon_flux / frame_rate
+                             n_subaperture, pixels_per_subaperture=4,
+                             verbose_flux=False, return_components=False):
+    """Compute photon flux per frame at total, sub-aperture, and pixel level.
+
+    ``photon_flux`` is interpreted as an areal density in ph/s/m^2.
+
+    By default the function returns the flux per pixel per frame to preserve
+    backward compatibility with existing callers.
+    """
+
+    flux_per_frame_density = photon_flux / frame_rate
+    magnitude_scale = 10 ** (- magnitudo / 2.5)
    
-    sub_aperture_radius = (telescope_diameter / n_subaperture)/2
-    
-    sub_aperture_area = np.pi * (sub_aperture_radius) ** 2
+    sub_aperture_side = telescope_diameter / n_subaperture
+    sub_aperture_area = sub_aperture_side ** 2
+    flux_total_per_frame = flux_per_frame_density * (n_subaperture ** 2) * sub_aperture_area * magnitude_scale
 
     flux_per_frame_per_sub_aperture \
-        = flux_per_frame * (sub_aperture_area / collecting_area)
+        = flux_per_frame_density * sub_aperture_area * magnitude_scale
     
-    flux_per_frame_per_sub_aperture_magnitudo \
-        = flux_per_frame_per_sub_aperture * 10 ** (- magnitudo / 2.5)
-    
-    flux_per_frame_per_sub_aperture_magnitudo_per_pixel \
-        = flux_per_frame_per_sub_aperture_magnitudo / pixels_per_subaperture
+    flux_per_frame_per_sub_aperture_per_pixel \
+        = flux_per_frame_per_sub_aperture / pixels_per_subaperture
         
     if verbose_flux:
-        
-        #print ("\nFLUX PER FRAME (PER S.A.):", flux_per_frame_per_sub_aperture)
-        
-        print ("\nFLUX PER FRAME:", flux_per_frame_per_sub_aperture_magnitudo)
+        print ("\nFLUX PER FRAME (TOTAL):", flux_total_per_frame)
+        print ("FLUX PER FRAME (PER SUB-APERTURE):", flux_per_frame_per_sub_aperture)
+        print ("FLUX PER FRAME (PER PIXEL):", flux_per_frame_per_sub_aperture_per_pixel)
 
-    return flux_per_frame_per_sub_aperture_magnitudo_per_pixel
+    if return_components:
+        return {
+            "flux_total_per_frame": flux_total_per_frame,
+            "flux_per_subaperture_per_frame": flux_per_frame_per_sub_aperture,
+            "flux_per_pixel_per_frame": flux_per_frame_per_sub_aperture_per_pixel,
+            "sub_aperture_area": sub_aperture_area,
+            "sub_aperture_side": sub_aperture_side,
+        }
+
+    return flux_per_frame_per_sub_aperture_per_pixel
 
 
 # Computes the pixel variance, as described in Equation (14) in "Semianalytical error budget 
@@ -1178,11 +1191,11 @@ def flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnit
 
 def compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                                  photon_flux, telescope_diameter,frame_rate, magnitudo, 
-                                 n_subaperture, collecting_area, pixels_per_subaperture=4,
+                                 n_subaperture, pixels_per_subaperture=4,
                                  verbose_flux=False):
     
     n_phot_pix = flux_for_frame_for_pixel(photon_flux, telescope_diameter, frame_rate, magnitudo,
-                                          n_subaperture, collecting_area, pixels_per_subaperture, 
+                                          n_subaperture, pixels_per_subaperture,
                                           verbose_flux=verbose_flux)
     
     pixel_pos = np.array(pixel_pos)                                            
@@ -1219,7 +1232,7 @@ def compute_noise_PSD_intermediate(omega_temp_freq_interval, actuators_number, s
 
 def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
                      photon_flux, telescope_diameter, frame_rate, magnitudo, n_subaperture,
-                     collecting_area, file_path_matrix_R, transf_funct,
+                     file_path_matrix_R, transf_funct,
                      actuators_number, omega_temp_freq_interval, c_optg,
                      pixels_per_subaperture=4, verbose=False, verbose_flux=False):
 
@@ -1227,7 +1240,7 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
   
     slope_noise_variance = compute_slope_noise_variance(F_excess, pixel_pos, sky_bkg, dark_curr, 
                                                         read_out_noise, photon_flux, telescope_diameter,
-                                                        frame_rate, magnitudo, n_subaperture, collecting_area,
+                                                        frame_rate, magnitudo, n_subaperture,
                                                         pixels_per_subaperture, verbose_flux=verbose_flux)
    
     p_coefficient = extract_propagation_coefficients(file_path_matrix_R)
@@ -1270,7 +1283,7 @@ def _compute_modal_variance_grid(
     omega_temp_freq_interval, t_freqs, f,
     t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
     excess_noise_factor, sky_background, dark_current, readout_noise,
-    photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+    photon_flux, frame_rate, magnitude, n_subaperture,
     slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
     wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
     psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
@@ -1355,7 +1368,6 @@ def _compute_modal_variance_grid(
             frame_rate=frame_rate,
             magnitudo=magnitude,
             n_subaperture=n_subaperture,
-            collecting_area=collecting_area,
             file_path_matrix_R=reconstruction_matrix_path,
             transf_funct=H_n_meas,
             actuators_number=actuators_number,
@@ -1386,7 +1398,7 @@ def _compute_modal_variance_grid(
 def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
                    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
                    excess_noise_factor, sky_background, dark_current, readout_noise,
-                   photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+                   photon_flux, frame_rate, magnitude, n_subaperture,
                    slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
                    wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
                    psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
@@ -1407,7 +1419,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
         omega_temp_freq_interval, t_freqs, f,
         t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
         excess_noise_factor, sky_background, dark_current, readout_noise,
-        photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+        photon_flux, frame_rate, magnitude, n_subaperture,
         slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
         wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
         psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
@@ -1561,7 +1573,6 @@ def optimize_gain_blocks(
     frame_rate,
     magnitude,
     n_subaperture,
-    collecting_area,
     slope_computer_weights,
     fitting_coeff,
     alpha,
@@ -1594,7 +1605,7 @@ def optimize_gain_blocks(
         omega_temp_freq_interval, t_freqs, f,
         t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
         excess_noise_factor, sky_background, dark_current, readout_noise,
-        photon_flux, frame_rate, magnitude, n_subaperture, collecting_area,
+        photon_flux, frame_rate, magnitude, n_subaperture,
         slope_computer_weights, fitting_coeff, alpha, seeing, modulation_radius,
         wind_speed, maximum_radial_order_corrected, reconstruction_matrix_path,
         psd_turbulence, psd_windshake, sigma_slopes_path, c_optg,
@@ -1692,7 +1703,6 @@ def compute_PSD_OL_CL(
     frame_rate,
     magnitudo,
     n_subaperture,
-    collecting_area,
     temporal_frequencies,
     frequencies,
     H_r,
@@ -1742,7 +1752,6 @@ def compute_PSD_OL_CL(
         frame_rate,
         magnitudo,
         n_subaperture,
-        collecting_area,
         file_path_matrix_R,
         H_n,
         actuators_number,
@@ -1759,7 +1768,7 @@ def compute_PSD_OL_CL(
 def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, plant_den,
                     PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed,
                     maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
-                    photon_flux, frame_rate, magnitudo, n_subaperture, collecting_area, temporal_frequencies, frequencies,
+                    photon_flux, frame_rate, magnitudo, n_subaperture, temporal_frequencies, frequencies,
                     file_path_matrix_R, file_path_sigma_slopes,
                     *, gain=None, controller_num=None, controller_den=None):
 
@@ -1783,7 +1792,7 @@ def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, 
                                                                                                           c_optg, F_excess, pixel_pos, 
                                                                                                           sky_bkg, dark_curr, read_out_noise,
                                                                                                           photon_flux, frame_rate, magnitudo, 
-                                                                                                          n_subaperture, collecting_area, 
+                                                                                                          n_subaperture,
                                                                                                           temporal_frequencies, frequencies, 
                                                                                                           H_r, H_n, file_path_matrix_R,  
                                                                                                           file_path_sigma_slopes,  
@@ -1958,7 +1967,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
                                              maximum_radial_order_corrected, c_optg,
                                              F_excess, pixel_pos, sky_bkg, dark_curr,
                                              read_out_noise, photon_flux, frame_rate,
-                                             magnitudo, n_subaperture, collecting_area,
+                                             magnitudo, n_subaperture,
                                              file_path_matrix_R,
                                              alpha=DEFAULT_ALIASING_ALPHA,
                                              file_path_sigma_slopes=None,
@@ -2042,7 +2051,7 @@ def prepare_single_mode_control_optimization(mode_index, omega_temp_freq_interva
     slope_noise_variance = compute_slope_noise_variance(
         F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
         photon_flux, telescope_diameter, frame_rate, magnitudo,
-        n_subaperture, collecting_area, verbose_flux=verbose_flux
+        n_subaperture, verbose_flux=verbose_flux
     )
 
     p_coefficient = np.asarray(extract_propagation_coefficients(file_path_matrix_R), dtype=float)

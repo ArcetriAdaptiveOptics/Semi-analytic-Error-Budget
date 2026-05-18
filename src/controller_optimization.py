@@ -257,7 +257,6 @@ def prepare_single_mode_control_optimization(
     frame_rate,
     magnitudo,
     n_subaperture,
-    collecting_area,
     file_path_matrix_R,
     alpha=DEFAULT_ALIASING_ALPHA,
     file_path_sigma_slopes=None,
@@ -313,8 +312,6 @@ def prepare_single_mode_control_optimization(
         Guide-star magnitude.
     n_subaperture : int
         Number of WFS sub-apertures per axis.
-    collecting_area : float
-        Telescope collecting area [m²].
     file_path_matrix_R : str
         Path to reconstruction-matrix FITS file.
     alpha : float, optional
@@ -392,7 +389,7 @@ def prepare_single_mode_control_optimization(
     slope_noise_variance = compute_slope_noise_variance(
         F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
         photon_flux, telescope_diameter, frame_rate, magnitudo,
-        n_subaperture, collecting_area,
+        n_subaperture,
     )
 
     p_coefficient = np.asarray(

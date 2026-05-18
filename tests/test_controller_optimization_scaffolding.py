@@ -82,7 +82,6 @@ class TestPrepareSingleModeControlOptimization(unittest.TestCase):
             frame_rate=1.0,
             magnitudo=0.0,
             n_subaperture=1,
-            collecting_area=1.0,
             file_path_matrix_R="dummy.fits"
         )
 
