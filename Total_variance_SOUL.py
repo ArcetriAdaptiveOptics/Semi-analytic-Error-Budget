@@ -191,7 +191,7 @@ if gain_mode == 'block_optimization':
         wind_speed, maximum_radial_order, file_path_R1,
         PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
         actuators_number=n_actuators, gain_block_sizes=gain_block_sizes,
-        verbose=False,
+        verbose=True, verbose_flux=False, verbose_gain=True,
     )
 
 elif gain_mode == 'fixed' and gain_value is not None:
@@ -230,7 +230,7 @@ elif gain_mode == 'legacy_sweep':
             wind_speed, maximum_radial_order, file_path_R1,
             PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
             actuators_number=n_actuators, modes_to_optimize=modes_TT, 
-            base_gain_vector=final_gain_vector, verbose=False
+            base_gain_vector=final_gain_vector, verbose=True
             )
         
         final_gain_vector[modes_TT] = best_gain_TT
@@ -251,7 +251,7 @@ elif gain_mode == 'legacy_sweep':
                 wind_speed, maximum_radial_order, file_path_R1,
                 PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
                 actuators_number=n_actuators, modes_to_optimize=modes_HO, 
-                base_gain_vector=final_gain_vector, verbose=False
+                base_gain_vector=final_gain_vector, verbose=True
                 )
             
             final_gain_vector[modes_HO] = best_gain_HO

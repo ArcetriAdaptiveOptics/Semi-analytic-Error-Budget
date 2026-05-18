@@ -30,9 +30,9 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'src',
     'file_fits',
     'ANDES',
-    'slopes_rms_time_avg_all.fits'
+    'slopes_rms_time_avg_all.fits' 
 )
-DEFAULT_ALIASING_ALPHA = -17 / 3
+DEFAULT_ALIASING_ALPHA = - 17 / 3   
 
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
@@ -1589,6 +1589,7 @@ def optimize_gain_blocks(
     gain_block_sizes,
     verbose=False,
     verbose_flux=False,
+    verbose_gain=False
 ):
     """
     Optimize one scalar gain per block using precomputed modal variance grid.
@@ -1638,7 +1639,16 @@ def optimize_gain_blocks(
         })
 
         start_mode = stop_mode
-
+        
+        if verbose_gain:
+            
+            mode_labels = ["TT", "HO"]
+            mode_label = mode_labels[block_index]
+        
+            print("\n--- Gain block optimization ---")
+            print(f"Modes: {mode_label}")
+            print(f"Best gain: {best_gain:.4f}")
+            
     return gain_vector, sweep_results
 
 

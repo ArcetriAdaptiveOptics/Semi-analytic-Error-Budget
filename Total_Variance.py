@@ -197,7 +197,7 @@ if gain_mode == 'block_optimization':
         wind_speed, maximum_radial_order, file_path_R1,
         PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
         actuators_number=n_actuators, gain_block_sizes=gain_block_sizes,
-        verbose=False,
+        verbose=False, verbose_flux=False, verbose_gain=False
     )
 
 elif gain_mode == 'fixed' and gain_value is not None:
