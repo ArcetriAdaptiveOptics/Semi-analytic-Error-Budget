@@ -33,7 +33,8 @@ class TestExampleScriptsSmoke(unittest.TestCase):
     def test_plot_system_psds_runs_without_display(self):
         with patch("matplotlib.pyplot.show") as mock_show:
             with repo_root_cwd():
-                result = plot_system_psds(mode_index=0, plot_inputs=False, show_plot=False)
+                result = plot_system_psds(mode_index=0, plot_inputs=False, show_plot=False,
+                                          gain_value=0.2, n_modes=10)
 
         mock_show.assert_not_called()
         self.assertIsInstance(result, dict)

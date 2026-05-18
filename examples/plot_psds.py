@@ -20,13 +20,17 @@ from src.Functions import (
 )
 
 
-def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True, gain_value=None):
+def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
+                     gain_value=None, n_modes=None):
     print(f"\nGenerating PSD plot for Mode {mode_index}...")
 
     # 1. Load parameters
     param = load_parameters('params_ANDES.yaml')
 
-    n_actuators = param['control']['n_modes']
+    if n_modes is not None:
+        n_actuators = n_modes
+    else:
+        n_actuators = param['control']['n_modes']
     D = param['telescope']['telescope_diam']
     aperture_radius = D / 2.0
     aperture_center = [0, 0, 0]
@@ -227,4 +231,4 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True, gain_value
 
 
 if __name__ == "__main__":
-    plot_system_psds(mode_index=0, plot_inputs=True, gain_value=0.2)
+    plot_system_psds(mode_index=0, plot_inputs=True, gain_value=0.2, n_modes=10)

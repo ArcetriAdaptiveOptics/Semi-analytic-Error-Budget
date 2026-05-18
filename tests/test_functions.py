@@ -739,35 +739,22 @@ class TestTurbulencePSD(unittest.TestCase):
 class TestFindBestGain(unittest.TestCase):
     """Tests the modal block optimization sweep logic."""
 
-    @patch('src.Functions.total_variance')
-    @patch('src.Functions.measure_variance')
-    @patch('src.Functions.aliasing_variance')
-    @patch('src.Functions.temporal_variance')
-    @patch('src.Functions.fitting_variance')
-    @patch('src.Functions.build_transfer_function')
+    @patch('src.Functions._compute_modal_variance_grid')
     def test_returns_three_elements_and_respects_arrays(
-        self, mock_build, mock_fit, mock_temp, mock_alias, mock_meas, mock_tot
+        self, mock_modal_grid
     ):
         """
         Verifies that find_best_gain returns (best_gain, gain_values, variances)
-        and successfully iterates without doing heavy physics math (using mocks).
+        and aggregates modal variances correctly.
         """
-        # 1. Setup lightweight mock returns to bypass slow physics calculations
-        mock_build.return_value = (MagicMock(), MagicMock())
-        mock_fit.return_value = 1.0
-        mock_temp.return_value = (1.0, 1.0, MagicMock(), MagicMock())
-        mock_alias.return_value = (1.0, 1.0, MagicMock(), MagicMock())
-        mock_meas.return_value = (1.0, 1.0, MagicMock(), MagicMock())
-        
-        # Simulate a parabolic variance curve: V = (gain - 0.2)^2 + 10
-        # The minimum will naturally be at gain = 0.2
-        def dummy_total_variance(*args, **kwargs):
-            # Extract the current gain being tested from the build_transfer_function mock
-            current_gain_vector = mock_build.call_args.kwargs['gain']
-            g = current_gain_vector[0] 
-            return (g - 0.2)**2 + 10.0
-            
-        mock_tot.side_effect = dummy_total_variance
+        # 1. Mock the precomputed modal variance grid used by find_best_gain.
+        # Two modes, three gains. Summed variance is minimal at gain 0.2.
+        gain_values = np.array([0.1, 0.2, 0.3])
+        modal_variances = np.array([
+            [10.4, 10.0, 10.2],
+            [5.3, 5.0, 5.4],
+        ])
+        mock_modal_grid.return_value = (gain_values, modal_variances)
 
         # 2. Call the function with dummy structural inputs
         best_gain, gains, variances = find_best_gain(
@@ -792,6 +779,8 @@ class TestFindBestGain(unittest.TestCase):
         self.assertIsInstance(gains, np.ndarray)
         self.assertIsInstance(variances, np.ndarray)
         self.assertEqual(len(gains), len(variances))
+        np.testing.assert_allclose(gains, gain_values)
+        np.testing.assert_allclose(variances, np.sum(modal_variances, axis=0))
         
-        # Check if the mock successfully found the minimum at 0.2
+        # Check if the minimum is found at gain = 0.2
         self.assertAlmostEqual(best_gain, 0.2, places=2)
