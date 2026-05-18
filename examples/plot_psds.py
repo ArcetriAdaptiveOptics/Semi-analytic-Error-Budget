@@ -166,12 +166,12 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True, gain_value
     var_meas_out = integrate.simpson(PSD_out_meas[mode_index, :], temporal_freqs)
 
     # Print variances for debug
-    print(f"Turbulence Variance (Input):    {var_temp_in:.2e} nm²")
-    print(f"Aliasing Variance (Input):      {var_alias_in:.2e} nm²")
-    print(f"Noise Variance (Input):         {var_meas_in:.2e} nm²")
-    print(f"Turbulence Variance (Output):   {var_temp_out:.2e} nm²")
-    print(f"Aliasing Variance (Output):     {var_alias_out:.2e} nm²")
-    print(f"Noise Variance (Output):        {var_meas_out:.2e} nm²")
+    print(f"Turbulence Variance (Input):    {np.sqrt(var_temp_in):.2e} nm")
+    print(f"Aliasing Variance (Input):      {np.sqrt(var_alias_in):.2e} nm")
+    print(f"Noise Variance (Input):         {np.sqrt(var_meas_in):.2e} nm")
+    print(f"Turbulence Variance (Output):   {np.sqrt(var_temp_out):.2e} nm")
+    print(f"Aliasing Variance (Output):     {np.sqrt(var_alias_out):.2e} nm")
+    print(f"Noise Variance (Output):        {np.sqrt(var_meas_out):.2e} nm")
 
     # 6. Create Plot
     plt.figure(figsize=(12, 7))
