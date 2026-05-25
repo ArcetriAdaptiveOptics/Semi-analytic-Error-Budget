@@ -34,7 +34,7 @@ from src.Functions import temporal_variance
 from src.Functions import total_variance
 from src.Functions import turbulence_psd
 from src.Functions import vibration_variance
-from src.Functions import _integrate_modal_psd
+from src.Functions import integrate_modal_psd
 from src.Functions import gain_maximum_from_total_delay
 from src.Functions import optimize_gain_blocks
 from src.Functions import resolve_gain_mode
@@ -332,10 +332,10 @@ def run(yaml_file):
     if not display:
         return
 
-    var_temp_modes = _integrate_modal_psd(PSD_out_temp_atmo, omega_temporal_freqs)
-    var_vibr_modes = _integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
-    var_alias_modes = _integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
-    var_meas_modes = _integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
+    var_temp_modes = integrate_modal_psd(PSD_out_temp_atmo, omega_temporal_freqs)
+    var_vibr_modes = integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
+    var_alias_modes = integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
+    var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes_display = var_temp_modes.size
     var_fit_modes = np.full(n_modes_display, np.real(var_fit) / n_modes_display)
 

@@ -30,7 +30,7 @@ from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
 from src.Functions import final_soul_optical_gain
 from src.Functions import compute_optical_gain
-from src.Functions import _integrate_modal_psd
+from src.Functions import integrate_modal_psd
 
 
 # Function to compute the total residual variance for a set of gain values,
@@ -753,10 +753,10 @@ def optg_soul_comparison (file_soul_optical_gain_cube, target_binning,
 def plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_meas, 
                            var_fit, omega_temporal_freqs, actuators_number): 
 
-    var_temp_modes = _integrate_modal_psd(PSD_out_temp, omega_temporal_freqs)
-    var_vibr_modes = _integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
-    var_alias_modes = _integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
-    var_meas_modes = _integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
+    var_temp_modes = integrate_modal_psd(PSD_out_temp, omega_temporal_freqs)
+    var_vibr_modes = integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
+    var_alias_modes = integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
+    var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes = actuators_number
     var_fit_modes = np.full(n_modes, np.real(var_fit) / n_modes)
     

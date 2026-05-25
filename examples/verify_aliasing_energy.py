@@ -4,6 +4,7 @@
 import numpy as np
 from scipy import integrate
 from astropy.io import fits
+import matplotlib.pyplot as plt
 
 from src.Functions import (
     DEFAULT_ALIASING_ALPHA,
@@ -15,6 +16,8 @@ from src.Functions import (
     extract_propagation_coefficients,
     radial_order_from_n_modes,
 )
+
+display = False  # Set to False to disable detailed printout of results
 
 def verify_aliasing_energy():
     print("\n" + "="*80)
@@ -108,6 +111,24 @@ def verify_aliasing_energy():
     n_modes_report = min(len(var_from_slopes), len(var_from_psd))
     if passata_available:
         n_modes_report = min(n_modes_report, len(var_passata))
+
+    if display:
+        n_modes = len(var_from_slopes)
+        x = np.arange(1, n_modes + 1)+1
+        plt.figure(figsize=(10, 6))
+        plt.plot(x, var_from_slopes, label='Variance from Slopes (SA)', marker='o')
+        plt.plot(x, var_from_psd, label='Variance from PSD Integral (SA)', marker='x')
+        if passata_available:
+            plt.plot(x[:len(var_passata)], var_passata, label='Variance from PSD Integral (PASSATA)', marker='s')
+        plt.xscale('log')
+        plt.yscale('log')
+        plt.xlabel('Mode Index')
+        plt.ylabel('Variance')
+        plt.title('Aliasing Variance Comparison')
+        plt.legend()
+        plt.grid(True, which="both", ls="--")
+        plt.tight_layout()
+        plt.show()
 
     print(f"shape var_from_psd: {var_from_psd.shape}, shape omega_sa: {omega_sa.shape}")
     print(f"{'Mode':<6} | {'Var from Slopes (SA)':<22} | {'Var PSD Integral (SA)':<22}"
