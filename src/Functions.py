@@ -33,6 +33,7 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'slopes_rms_time_avg_all.fits' 
 )
 DEFAULT_ALIASING_ALPHA = - 17 / 3   
+DEFAULT_PARALLEL_FRACTION = 0.25
 
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
@@ -962,7 +963,8 @@ def omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected):
 def compute_k_prime(omega_temp_freq_interval, sigma_slope_alias,
                     telescope_diameter, windspeed,
                     maximum_radial_order_corrected,
-                    alpha=DEFAULT_ALIASING_ALPHA):
+                    alpha=DEFAULT_ALIASING_ALPHA,
+                    parallel_fraction=DEFAULT_PARALLEL_FRACTION):
 
     w_0 = omega_0(telescope_diameter, windspeed, maximum_radial_order_corrected)
     
@@ -970,7 +972,10 @@ def compute_k_prime(omega_temp_freq_interval, sigma_slope_alias,
     omega_max = np.max(omega_temp_freq_interval) 
     integral_result = w_0 ** alpha * (w_0 - omega_min) + (omega_max ** (alpha + 1)
                                                                   - w_0 ** (alpha + 1)) / (alpha + 1)
-    k_prime = (sigma_slope_alias ** 2) / integral_result  
+    
+    # We apply the square of the parallel fraction directly to the slope variance,
+    # which is equivalent to applying it to k' since k' is proportional to the slope variance.
+    k_prime = (parallel_fraction * sigma_slope_alias) ** 2 / integral_result
     
     return k_prime
     

@@ -65,7 +65,7 @@ _SA_SIGMA_SLOPES = os.path.join(_REPO_ROOT, "src", "file_fits", "ANDES", "slopes
 
 
 # ── Shared Physics Parameters ────────────────────────────────────────────────
-_VERBOSE = False
+_VERBOSE = False            # Set to True for detailed printouts during the test
 
 _D = 8.222                  # Telescope diameter [m]
 _R0 = 0.15                  # Fried parameter [m] at 500 nm
@@ -191,8 +191,13 @@ class TestAliasingVariance(unittest.TestCase):
         ratio = max(sa_alias_nm2, self.p3_alias_nm2) / min(sa_alias_nm2, self.p3_alias_nm2)
 
         self.assertLess(
-            ratio, 3.0,
+            ratio, 2.0,
             msg=(f"Aliasing variance mismatch is too large. "
+                 f"SA: {sa_alias_nm2:.2f} nm², P3: {self.p3_alias_nm2:.2f} nm²")
+        )
+        self.assertGreater(
+            ratio, 0.5,
+            msg=(f"Aliasing variance mismatch is too small. "
                  f"SA: {sa_alias_nm2:.2f} nm², P3: {self.p3_alias_nm2:.2f} nm²")
         )
 

@@ -69,7 +69,8 @@ def verify_aliasing_energy():
     p_coeff = p_coeff[:n_modes]
     c_optg_modes = np.squeeze(c_optg[:n_modes])
 
-    var_from_slopes = (sigma_slope_alias ** 2) * p_coeff / (c_optg_modes ** 2)
+    parallel_fraction = 0.25
+    var_from_slopes = (parallel_fraction * (sigma_slope_alias ** 2)) * p_coeff / (c_optg_modes ** 2)
 
     # --------------------------------------------------------------------------------
     # METHOD 2: Numerical integral of SA PSD
