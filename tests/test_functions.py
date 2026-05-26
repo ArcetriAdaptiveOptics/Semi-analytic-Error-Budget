@@ -525,27 +525,12 @@ class TestComputeSlopeNoiseVariance(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# compute_k_prime
+# aliasing and optical gain
 # ---------------------------------------------------------------------------
-
-class TestComputeKPrime(unittest.TestCase):
-    """compute_k_prime computes the aliasing normalisation coefficient k'."""
-
-    @staticmethod
-    def _formula(omega, alpha, sigma_slope, c, D, v, N):
-        w0      = 2 * np.pi * (N + 1) * v / D
-        om_min  = np.min(omega)
-        om_max  = np.max(omega)
-        integral = (
-            w0 ** alpha * (w0 - om_min)
-            + (om_max ** (alpha + 1) - w0 ** (alpha + 1)) / (alpha + 1)
-        )
-        return sigma_slope ** 2 / (c ** 2 * integral)
-
 
 class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
     """Regression tests for aliasing defaults and optical-gain broadcasting."""
-
+   
     @staticmethod
     def _formula(omega, alpha, sigma_slope, c, D, v, N):
         w0      = 2 * np.pi * (N + 1) * v / D
@@ -555,7 +540,9 @@ class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
             w0 ** alpha * (w0 - om_min)
             + (om_max ** (alpha + 1) - w0 ** (alpha + 1)) / (alpha + 1)
         )
-        return sigma_slope ** 2 / (c ** 2 * integral)
+        from src.Functions import DEFAULT_PARALLEL_FRACTION
+        return ((DEFAULT_PARALLEL_FRACTION * sigma_slope) ** 2) / (c ** 2 * integral)
+    
 
     @patch("src.Functions.k_coeff_aliasing", return_value=np.array([1.0]))
     def test_psd_final_alias_defaults_alpha_to_minus_17_over_3(self, mock_k):
