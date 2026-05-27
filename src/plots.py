@@ -26,7 +26,6 @@ from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
 from src.Functions import measure_variance
 from src.Functions import build_transfer_function
-from src.Functions import interpolate_and_normalize_psd
 from src.Functions import align_psd_modes
 from src.Functions import final_soul_optical_gain
 from src.Functions import compute_optical_gain
@@ -67,19 +66,9 @@ def variance_total_for_test(actuators_number, gain_values, omega_temp_freq_inter
         
         variance_fit = fitting_variance(fitting_coeff, actuators_number, telescope_diameter, fried_parameter)
         
-         
-        if np.array_equal(t_freqs, f): 
-            
-            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, actuators_number,
-                                                              omega_temp_freq_interval)
 
-        else: 
-            
-            PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
-            _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, PSD_wind_vib_interp_norm,
-                                                           H_r_temp, actuators_number, omega_temp_freq_interval)
-
-        
+        _, variance_temporal,_ , _ = temporal_variance(psd_turbulence, psd_windshake, H_r_temp, actuators_number,
+                                                            omega_temp_freq_interval)        
         
         
         _, variance_aliasing, _, _ = aliasing_variance(
@@ -586,14 +575,11 @@ def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, te
 # Function to compute and plot the total open-loop and closed-loop PSD (mode 0) 
 # by summing temporal, aliasing, and measurement contributions.
 
-def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number, num1, num2, num3, den1, den2, den3,
+def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number, plant_num, plant_den,
                            PSD_atmo_turb, PSD_vibration, alpha, telescope_diameter, seeing, modulation_radius, windspeed, 
                            maximum_radial_order_corrected, c_optg, F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise, 
-                           photon_flux,frame_rate, magnitudo, n_subaperture, temporal_frequencies, frequencies,
+                           photon_flux,frame_rate, magnitudo, n_subaperture,
                            file_path_matrix_R, file_path_sigma_slopes):
-
-    plant_num = np.polymul(np.polymul(np.asarray(num1), np.asarray(num2)), np.asarray(num3))
-    plant_den = np.polymul(np.polymul(np.asarray(den1), np.asarray(den2)), np.asarray(den3))
 
     H_r, H_n = build_transfer_function(
         omega_temp_freq_interval,
@@ -603,18 +589,10 @@ def plot_PSD_OL_CL_mode_0 (gain, omega_temp_freq_interval, t_0, actuators_number
         plant_den,
         gain=gain,
     )
+
     
-    if np.array_equal(temporal_frequencies, frequencies):
-    
-        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  
-                                                                   actuators_number, omega_temp_freq_interval)
-        
-    else:
-        
-        PSD_wind_vib_interp_normalized = interpolate_and_normalize_psd(temporal_frequencies, frequencies, PSD_vibration, actuators_number)
-        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_wind_vib_interp_normalized, 
-                                                                                 H_r, actuators_number, omega_temp_freq_interval)
-        
+    _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  
+                                                                actuators_number, omega_temp_freq_interval)      
         
     
     _, _, PSD_output_alias, PSD_input_alias = aliasing_variance(

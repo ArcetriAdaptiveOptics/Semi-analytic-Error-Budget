@@ -14,7 +14,6 @@ from src.Functions import seeing_to_r0
 from src.Functions import turbulence_psd
 from src.Functions import funct_d2
 from src.Functions import total_variance
-from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
 from src.Functions import radial_order_from_n_modes
@@ -25,7 +24,6 @@ from src.Functions import temporal_variance
 from src.Functions import aliasing_variance
 from src.Functions import measure_variance
 from src.Functions import vibration_variance
-from src.Functions import PSD_conversion
 from src.Functions import find_best_gain
 from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain
@@ -160,16 +158,13 @@ else:
     raise RuntimeError("Either 'file_optg_cube' or 'file_optg' must be provided") 
 
 
-freq, PSD_wind_vib = load_PSD_windshake(file_path_wind)
+freq, PSD_wind_vib = load_PSD_windshake(file_path_wind, target_frequencies=temporal_freqs)
 
 if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):                                     
     
     raise RuntimeError("PSD windshake or corresponding frequencies not loaded") 
 
 print("PSD windshake and corresponding frequencies loaded successfully.")
-
-
-PSD_wind_vib = PSD_conversion(PSD_wind_vib)
 
 PSD_atmosf = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
                             layers_altitude, wind_speed, wind_direction, spatial_freqs, temporal_freqs,
@@ -189,15 +184,39 @@ if gain_mode == 'block_optimization':
 
     gain_maximum = gain_maximum_from_total_delay(total_delay)
     gain_, gain_sweeps = optimize_gain_blocks(
-        gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-        t_0, plant_num, plant_den, telescope_diameter, fried_param,
-        F_excess_noise, sky_background, dark_current, readout_noise,
-        phot_flux, frame_rate, magnitude, n_subapert,
-        x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
-        wind_speed, maximum_radial_order, file_path_R1,
-        PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
-        actuators_number=n_actuators, gain_block_sizes=gain_block_sizes,
-        verbose=False, verbose_flux=False, verbose_gain=False
+        gain_min = gain_minimum,
+        gain_max = gain_maximum,
+        omega_temp_freq_interval = omega_temporal_freqs,
+        t_0 = t_0,
+        plant_num = plant_num,
+        plant_den = plant_den,
+        telescope_diameter = telescope_diameter,
+        fried_parameter = fried_param,
+        excess_noise_factor = F_excess_noise,
+        sky_background = sky_background,
+        dark_current = dark_current,
+        readout_noise = readout_noise,
+        photon_flux = phot_flux,
+        frame_rate = frame_rate,
+        magnitude = magnitude,
+        n_subaperture = n_subapert,
+        slope_computer_weights = x_pixel,
+        fitting_coeff = fitting_coeff,
+        alpha = alpha_,
+        seeing = seeing,
+        modulation_radius = modulation_radius,
+        wind_speed = wind_speed,
+        maximum_radial_order_corrected = maximum_radial_order,
+        reconstruction_matrix_path = file_path_R1,
+        psd_turbulence = PSD_atmosf,
+        psd_windshake = PSD_wind_vib,
+        sigma_slopes_path = file_sigma_slope,
+        c_optg = c_optg,
+        actuators_number = n_actuators,
+        gain_block_sizes = gain_block_sizes,
+        verbose = False,
+        verbose_flux = False,
+        verbose_gain = False
     )
 
 elif gain_mode == 'fixed' and gain_value is not None:
@@ -228,15 +247,38 @@ elif gain_mode == 'legacy_sweep':
         print("\n--- Tip-Tilt Gain Optimization ---")
         # Capture the 3 outputs for the tip-tilt optimization
         best_gain_TT, gain_vals_TT, var_TT = find_best_gain(
-            gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-            t_0, plant_num, plant_den, telescope_diameter, fried_param,
-            F_excess_noise, sky_background, dark_current, readout_noise,
-            phot_flux, frame_rate, magnitude, n_subapert,
-            x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
-            wind_speed, maximum_radial_order, file_path_R1,
-            PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
-            actuators_number=n_actuators, modes_to_optimize=modes_TT, 
-            base_gain_vector=final_gain_vector, verbose=False
+            gain_min = gain_minimum,
+            gain_max = gain_maximum,
+            omega_temp_freq_interval = omega_temporal_freqs,
+            t_0 = t_0,
+            plant_num = plant_num,
+            plant_den = plant_den,
+            telescope_diameter = telescope_diameter,
+            fried_param = fried_param,
+            F_excess_noise = F_excess_noise,
+            sky_background = sky_background,
+            dark_current = dark_current,
+            readout_noise = readout_noise,
+            phot_flux = phot_flux,
+            frame_rate = frame_rate,
+            magnitude = magnitude,
+            n_subaperture = n_subapert,
+            slope_computer_weights = x_pixel,
+            fitting_coeff = fitting_coeff,
+            alpha = alpha_,
+            seeing = seeing, 
+            modulation_radius = modulation_radius,
+            wind_speed = wind_speed,
+            maximum_radial_order_corrected = maximum_radial_order,
+            reconstruction_matrix_path = file_path_R1,
+            psd_turbulence = PSD_atmosf,
+            psd_windshake = PSD_wind_vib,
+            sigma_slopes_path = file_sigma_slope,
+            c_optg = c_optg,
+            actuators_number=n_actuators,
+            modes_to_optimize=modes_TT, 
+            base_gain_vector=final_gain_vector,
+            verbose=False
             )
         
         final_gain_vector[modes_TT] = best_gain_TT
@@ -249,15 +291,38 @@ elif gain_mode == 'legacy_sweep':
             print("\n--- Higher Orders Gain Optimization ---")
             # Capture the 3 outputs for the higher orders optimization
             best_gain_HO, gain_vals_HO, var_HO = find_best_gain(
-                gain_minimum, gain_maximum, omega_temporal_freqs, temporal_freqs, freq,
-                t_0, plant_num, plant_den, telescope_diameter, fried_param,
-                F_excess_noise, sky_background, dark_current, readout_noise,
-                phot_flux, frame_rate, magnitude, n_subapert,
-                x_pixel, fitting_coeff, alpha_, seeing, modulation_radius,
-                wind_speed, maximum_radial_order, file_path_R1,
-                PSD_atmosf, PSD_wind_vib, file_sigma_slope, c_optg,
-                actuators_number=n_actuators, modes_to_optimize=modes_HO, 
-                base_gain_vector=final_gain_vector, verbose=False
+                gain_min = gain_minimum,
+                gain_max = gain_maximum,
+                omega_temp_freq_interval = omega_temporal_freqs,
+                t_0 = t_0,
+                plant_num = plant_num,
+                plant_den = plant_den,
+                telescope_diameter = telescope_diameter,
+                fried_parameter = fried_param,
+                excess_noise_factor = F_excess_noise,
+                sky_background = sky_background,
+                dark_current = dark_current,
+                readout_noise = readout_noise,
+                photon_flux = phot_flux,
+                frame_rate = frame_rate,
+                magnitude = magnitude,
+                n_subaperture = n_subapert,
+                slope_computer_weights = x_pixel,
+                fitting_coeff = fitting_coeff,
+                alpha = alpha_,
+                seeing = seeing,
+                modulation_radius = modulation_radius,
+                wind_speed = wind_speed,
+                maximum_radial_order_corrected = maximum_radial_order,
+                reconstruction_matrix_path = file_path_R1,
+                psd_turbulence = PSD_atmosf,
+                psd_windshake = PSD_wind_vib,
+                sigma_slopes_path = file_sigma_slope,
+                c_optg = c_optg,
+                actuators_number=n_actuators,
+                modes_to_optimize=modes_HO, 
+                base_gain_vector=final_gain_vector,
+                verbose=False
                 )
             
             final_gain_vector[modes_HO] = best_gain_HO
@@ -298,16 +363,7 @@ var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried
 #################
 
 
-if np.array_equal(temporal_freqs, freq): 
-    
-    
-    var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib, H_r_temp, n_actuators, omega_temporal_freqs)
-
-else: 
-    
-    PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq, PSD_wind_vib, n_actuators)
-    var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib_interp_norm, H_r_temp, 
-                                                                              n_actuators, omega_temporal_freqs)
+var_vibr_OL, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance (PSD_wind_vib, H_r_temp, n_actuators, omega_temporal_freqs)
     
 
 #################
@@ -315,16 +371,8 @@ else:
 #################
 
 
-if np.array_equal(temporal_freqs, freq): 
-    
-    var_temp_OL, var_temp_CL, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib, H_r_temp, n_actuators, 
-                                                                             omega_temporal_freqs)
-
-else: 
-    
-    PSD_wind_vib_interp_norm = interpolate_and_normalize_psd(temporal_freqs, freq, PSD_wind_vib, n_actuators)
-    var_temp_OL, var_temp_CL, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib_interp_norm, 
-                                                                             H_r_temp, n_actuators, omega_temporal_freqs)
+var_temp_OL, var_temp_CL, PSD_out_temp, PSD_in_temp = temporal_variance (PSD_atmosf, PSD_wind_vib, H_r_temp, n_actuators, 
+                                                                         omega_temporal_freqs)
 
 
 #################
@@ -370,9 +418,9 @@ var_meas_OL, var_meas_CL, PSD_out_meas, PSD_in_meas = measure_variance(
 )
 
 print ("\nTOTAL VARIANCE USING THE BEST GAIN:")
-print ("\nOPEN LOOP TOTAL VARIANCE:")
+print ("\nOPEN LOOP:")
 var_total_OL = total_variance(var_fit, var_temp_OL, var_alias_OL, var_meas_OL, verbose=True)
-print ("CLOSED LOOP TOTAL VARIANCE:")
+print ("CLOSED LOOP:")
 var_total_CL = total_variance(var_fit, var_temp_CL, var_alias_CL, var_meas_CL, verbose=True)
 
 ##### PLOTS AND CHECKS
@@ -423,10 +471,10 @@ if display:
                               file_modal_psd_alias_path)
 
 
-    plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, n1, n2, n3, d1, d2, d3,
+    plot_PSD_OL_CL_mode_0(gain_, omega_temporal_freqs, t_0, n_actuators, plant_num, plant_den,
                           PSD_atmosf, PSD_wind_vib, alpha_, telescope_diameter, seeing, modulation_radius, wind_speed, 
                           maximum_radial_order, c_optg, F_excess_noise, x_pixel, sky_background, dark_current, readout_noise, 
-                          phot_flux, frame_rate, magnitude, n_subapert, temporal_freqs, freq,
+                          phot_flux, frame_rate, magnitude, n_subapert,
                           file_path_R1, file_sigma_slope)
     
     if system == "SOUL":

@@ -451,15 +451,6 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     return PSD_atmo
 
 
-# Function to convert a PSD from nm^2/Hz to nm^2/(rad/s)
-
-def PSD_conversion (PSD_to_convert):
-    
-    PSD = PSD_to_convert/(2 * np.pi)
-    
-    return PSD
-
-
 # Function to calculate the Fitting Error, see Equation (7) (in "Semianalytical error budget 
 # for adaptive optics systems with pyramid wavefront sensors", Agapito and Pinna, 2019).
 # The analytical formula yields rad^2; the function converts it to nm^2 to match the other terms.
@@ -508,22 +499,34 @@ def integrate_function(integrand_function, integr_interval):
 
 
 # Function that allows us to load the windshake PSD and their corresponding frequencies
-
-def load_PSD_windshake(file_path_wind): 
-    
+      
+def load_PSD_windshake(file_path_wind, target_frequencies=None): 
+    """
+    Loads the windshake PSD from a FITS file.
+    If target_frequencies is provided, it automatically interpolates 
+    and normalizes the PSD to match the target frequency grid.
+    """
     with fits.open(file_path_wind) as hdul: 
-        
         try: 
+            data = hdul[0].data                                                
+            frequencies = data[0, :]                                           
+            PSD_windshake = data[1:, :]                                        
             
-            data = hdul[0].data                                                # pylint: disable=E1101 
-            frequencies = data[0, :]                                           # first row: frequencies 
-            PSD_windshake = data[1:, :]                                        # second and third rows: PSD tip and tilt
+            # Conversione integrata
+            PSD_windshake = PSD_windshake / (2 * np.pi)
+
+            # Interpolazione dinamica (se richiesta)
+            if target_frequencies is not None:
+                if not np.array_equal(frequencies, target_frequencies):
+                    # Passiamo solo le frequenze e la PSD grezza
+                    PSD_windshake = interpolate_and_normalize_psd(
+                        target_frequencies, frequencies, PSD_windshake
+                    )
+                frequencies = target_frequencies
 
             return frequencies, PSD_windshake
 
         except Exception as exc: 
-        
-            
             print(exc)
             return None, None
  
@@ -1284,8 +1287,7 @@ def measure_variance(F_excess, pixel_pos, sky_bkg, dark_curr, read_out_noise,
 
 
 def _compute_modal_variance_grid(
-    gain_min, gain_max,
-    omega_temp_freq_interval, t_freqs, f,
+    gain_min, gain_max, omega_temp_freq_interval,
     t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
     excess_noise_factor, sky_background, dark_current, readout_noise,
     photon_flux, frame_rate, magnitude, n_subaperture,
@@ -1320,12 +1322,6 @@ def _compute_modal_variance_grid(
     # Distribute fitting variance equally across modes
     variance_fit_per_mode = variance_fit_total / actuators_number
     
-    # Perform interpolation outside the loop for efficiency
-    if not np.array_equal(t_freqs, f):
-        psd_windshake_ready = interpolate_and_normalize_psd(t_freqs, f, psd_windshake, actuators_number)
-    else:
-        psd_windshake_ready = psd_windshake
-    
     # Sweep over all gain values
     for gain_idx, g in enumerate(gain_values):
         
@@ -1343,7 +1339,7 @@ def _compute_modal_variance_grid(
         H_n_alias = H_n_meas
         
         # Compute PSDs (these are per-mode matrices)
-        _, _, PSD_temporal, _ = temporal_variance(psd_turbulence, psd_windshake_ready,
+        _, _, PSD_temporal, _ = temporal_variance(psd_turbulence, psd_windshake,
                                               H_r_temp, actuators_number,
                                               omega_temp_freq_interval)
         
@@ -1400,7 +1396,7 @@ def _compute_modal_variance_grid(
 # It supports block optimization by accepting a base gain vector (frozen modes)
 # and a list of modes to optimize during the current sweep.
 
-def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
+def find_best_gain(gain_min, gain_max, omega_temp_freq_interval,
                    t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
                    excess_noise_factor, sky_background, dark_current, readout_noise,
                    photon_flux, frame_rate, magnitude, n_subaperture,
@@ -1420,8 +1416,7 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval, t_freqs, f,
     
     # Compute modal variance grid ONCE
     gain_values, modal_variances = _compute_modal_variance_grid(
-        gain_min, gain_max,
-        omega_temp_freq_interval, t_freqs, f,
+        gain_min, gain_max, omega_temp_freq_interval,
         t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
         excess_noise_factor, sky_background, dark_current, readout_noise,
         photon_flux, frame_rate, magnitude, n_subaperture,
@@ -1563,8 +1558,6 @@ def optimize_gain_blocks(
     gain_min,
     gain_max,
     omega_temp_freq_interval,
-    t_freqs,
-    f,
     t_0,
     plant_num,
     plant_den,
@@ -1607,8 +1600,7 @@ def optimize_gain_blocks(
 
     # Compute modal variance grid ONCE for all modes and all gain values
     gain_values, modal_variances = _compute_modal_variance_grid(
-        gain_min, gain_max,
-        omega_temp_freq_interval, t_freqs, f,
+        gain_min, gain_max, omega_temp_freq_interval, 
         t_0, plant_num, plant_den, telescope_diameter, fried_parameter,
         excess_noise_factor, sky_background, dark_current, readout_noise,
         photon_flux, frame_rate, magnitude, n_subaperture,
@@ -1669,19 +1661,23 @@ def interpolate_vector(x_interpolation, x_original, vector_original):
 
 # Function to interpolate and normalize PSD to a new frequency interval.
 
-def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_original, actuators_number):
+
+def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_original):
 
     PSD_original = np.asarray(PSD_original)
-    PSD_interpolated = np.zeros((actuators_number, len(freqs_interpolation)))
+
+    # 1. Number of modes is determined from the original PSD shape, not from a global variable
+    n_modes_available = PSD_original.shape[0]
+
+    # 2. It uses n_modes_available to define the shape of the interpolated PSD, ensuring it matches the original data
+    PSD_interpolated = np.zeros((n_modes_available, len(freqs_interpolation)))
     PSD_interpolated_normalized = np.zeros_like(PSD_interpolated)
-    sigma2 = np.zeros(actuators_number)
-    sigma2_interp = np.zeros(actuators_number)
+    sigma2 = np.zeros(n_modes_available)
+    sigma2_interp = np.zeros(n_modes_available)
     
     Omega_freqs_interpolation = 2 * np.pi * freqs_interpolation  
     Omega_freqs_original = 2 * np.pi * freqs_original
-    
-    n_modes_available = min(actuators_number, PSD_original.shape[0])
-    
+
     for i in range(n_modes_available):
 
         PSD_interpolated[i, :] = interpolate_vector(Omega_freqs_interpolation, Omega_freqs_original, PSD_original[i, :])
@@ -1718,27 +1714,16 @@ def compute_PSD_OL_CL(
     frame_rate,
     magnitudo,
     n_subaperture,
-    temporal_frequencies,
-    frequencies,
     H_r,
     H_n,
     file_path_matrix_R,
-    file_path_sigma_slopes,
-    verbose=False, verbose_flux=False
+    file_path_sigma_slopes
 ):
-    
-    if np.array_equal(temporal_frequencies, frequencies):
-    
-        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  
-                                                                   actuators_number, omega_temp_freq_interval)
-        
-    else:
-        
-        PSD_wind_vib_interp_normalized = interpolate_and_normalize_psd(temporal_frequencies, frequencies, PSD_vibration, actuators_number)
-        _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_wind_vib_interp_normalized, 
-                                                                   H_r, actuators_number, omega_temp_freq_interval)
-        
-        
+
+
+    _, _, PSD_output_temp, PSD_input_temp = temporal_variance (PSD_atmo_turb, PSD_vibration, H_r,  
+                                                                actuators_number, omega_temp_freq_interval)    
+
     
     _, _, PSD_output_alias, PSD_input_alias = aliasing_variance(
         H_n,
@@ -1808,10 +1793,8 @@ def total_PSD_OL_CL(omega_temp_freq_interval, t_0, actuators_number, plant_num, 
                                                                                                           sky_bkg, dark_curr, read_out_noise,
                                                                                                           photon_flux, frame_rate, magnitudo, 
                                                                                                           n_subaperture,
-                                                                                                          temporal_frequencies, frequencies, 
                                                                                                           H_r, H_n, file_path_matrix_R,  
-                                                                                                          file_path_sigma_slopes,  
-                                                                                                          verbose=False, verbose_flux=False)
+                                                                                                          file_path_sigma_slopes)
     
     
     PSD_total_input = PSD_in_temp + PSD_in_alias + PSD_in_meas
@@ -1827,11 +1810,11 @@ def total_variance(fit_err, temp_err, alias_err, meas_err, verbose=False):
     var_tot = np.real(fit_err) + np.real(temp_err) + np.real(meas_err) + np.real(alias_err)
 
     if verbose:
-        print (f"Fitting variance [nm]: {np.sqrt(np.real(fit_err))}")
-        print (f"Temporal variance [nm]: {np.sqrt(np.real(temp_err))}")
-        print (f"Aliasing variance [nm]: {np.sqrt(np.real(alias_err))}")
-        print (f"Measurement variance [nm]: {np.sqrt(np.real(meas_err))}")
-        print (f"Total variance [nm]: {np.sqrt(np.real(var_tot))}")
+        print (f"Fitting RMS [nm]: {np.sqrt(np.real(fit_err))}")
+        print (f"Temporal RMS [nm]: {np.sqrt(np.real(temp_err))}")
+        print (f"Aliasing RMS [nm]: {np.sqrt(np.real(alias_err))}")
+        print (f"Measurement RMS [nm]: {np.sqrt(np.real(meas_err))}")
+        print (f"Total RMS [nm]: {np.sqrt(np.real(var_tot))}")
     return var_tot
 
 

@@ -25,7 +25,6 @@ from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain
 from src.Functions import fitting_variance
 from src.Functions import funct_d2
-from src.Functions import interpolate_and_normalize_psd
 from src.Functions import load_parameters
 from src.Functions import load_PSD_windshake
 from src.Functions import measure_variance
@@ -181,7 +180,7 @@ def run(yaml_file):
 
     gain_sweeps = None
 
-    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1)
+    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1, target_frequencies=temporal_freqs)
 
     if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):
         raise RuntimeError("PSD windshake or corresponding frequencies not loaded")
@@ -221,38 +220,36 @@ def run(yaml_file):
 
         gain_maximum = gain_maximum_from_total_delay(total_delay)
         gain_, gain_sweeps = optimize_gain_blocks(
-            control['gain_min'],
-            gain_maximum,
-            omega_temporal_freqs,
-            temporal_freqs,
-            freq,
-            t_0,
-            plant_num,
-            plant_den,
-            telescope_diameter,
-            fried_param,
-            F_excess_noise,
-            sky_background,
-            dark_current,
-            readout_noise,
-            phot_flux,
-            frame_rate,
-            magnitudo,
-            n_subapert,
-            x_pixel,
-            fitting_coeff,
-            alpha_,
-            seeing_,
-            modulation_radius,
-            wind_speed,
-            maximum_rad_order_corr,
-            file_path_R1,
-            PSD_atmosf,
-            PSD_wind_vib,
-            file_sigma_slope,
-            c_optg,
-            n_actuators,
-            gain_block_sizes,
+            gain_min = control['gain_min'],
+            gain_max = gain_maximum,
+            omega_temp_freq_interval = omega_temporal_freqs,
+            t_0 = t_0,
+            plant_num = plant_num,
+            plant_den = plant_den,
+            telescope_diameter = telescope_diameter,
+            fried_parameter = fried_param,
+            excess_noise_factor = F_excess_noise,
+            sky_background = sky_background,
+            dark_current = dark_current,
+            readout_noise = readout_noise,
+            photon_flux = phot_flux,
+            frame_rate = frame_rate,
+            magnitude = magnitudo,
+            n_subaperture = n_subapert,
+            slope_computer_weights = x_pixel,
+            fitting_coeff = fitting_coeff,
+            alpha = alpha_,
+            seeing = seeing_,
+            modulation_radius = modulation_radius,
+            wind_speed = wind_speed,
+            maximum_radial_order_corrected = maximum_rad_order_corr,
+            reconstruction_matrix_path = file_path_R1,
+            psd_turbulence = PSD_atmosf,
+            psd_windshake = PSD_wind_vib,
+            sigma_slopes_path = file_sigma_slope,
+            c_optg = c_optg,
+            actuators_number = n_actuators,
+            gain_block_sizes = gain_block_sizes,
             verbose=False,
         )
     elif gain_mode == 'fixed':
@@ -275,13 +272,7 @@ def run(yaml_file):
 
     var_fit = fitting_variance(fitting_coeff, n_actuators, telescope_diameter, fried_param)
 
-    PSD_wind_for_calc = PSD_wind_vib
-
-    if not np.array_equal(temporal_freqs, freq):
-        PSD_wind_for_calc = interpolate_and_normalize_psd(temporal_freqs, freq,
-                                                          PSD_wind_vib, n_actuators)
-
-    PSD_vibr_zero = np.zeros_like(PSD_wind_for_calc)
+    PSD_vibr_zero = np.zeros_like(PSD_wind_vib)
 
     _, var_temp_atmo_CL, PSD_out_temp_atmo, PSD_in_temp_atmo = temporal_variance(
         PSD_atmosf,
@@ -291,7 +282,7 @@ def run(yaml_file):
         omega_temporal_freqs,
     )
 
-    _, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance(PSD_wind_for_calc, H_r_temp,
+    _, var_vibr_CL, PSD_out_vibr, PSD_in_vibr = vibration_variance(PSD_wind_vib, H_r_temp,
                                                                     n_actuators, omega_temporal_freqs)
 
     _, var_alias_CL, PSD_out_alias, PSD_in_alias = aliasing_variance(

@@ -81,7 +81,7 @@ class TestMainSaebBlockOptimization(unittest.TestCase):
             call_order.append("load_parameters")
             return fake_param
 
-        def fake_load_psd_windshake(_):
+        def fake_load_psd_windshake(_, target_frequencies=None):
             call_order.append("load_psd_windshake")
             freq = np.array([1.0, 2.0, 4.0, 8.0])
             psd = np.ones((4, 4))
