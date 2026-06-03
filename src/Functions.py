@@ -1669,7 +1669,7 @@ def interpolate_and_normalize_psd(freqs_interpolation, freqs_original, PSD_origi
     # 1. Number of modes is determined from the original PSD shape, not from a global variable
     n_modes_available = PSD_original.shape[0]
 
-    # 2. It uses n_modes_available to define the shape of the interpolated PSD, ensuring it matches the original data
+    # 2. It uses n_modes_available to define the shape of the interpolated PSD, ensuring it matches the original data
     PSD_interpolated = np.zeros((n_modes_available, len(freqs_interpolation)))
     PSD_interpolated_normalized = np.zeros_like(PSD_interpolated)
     sigma2 = np.zeros(n_modes_available)
