@@ -7,7 +7,7 @@ Created on Wed Nov 12 15:43:33 2025
 """
 # pylint: disable=C
 
-from dataclasses import dataclass, field
+#from dataclasses import dataclass, field
 
 import yaml
 import os
@@ -925,7 +925,7 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
             seeing_vals = data[0, 0, :]
         else:
             seeing_vals = data[0]
-            
+        
         # ---------------------------------------------------------------------
         # MODULATION RADIUS AXIS EXTRACTION
         # ---------------------------------------------------------------------
@@ -934,7 +934,7 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
             modal_radius_vals = hdul[1].data
         else:
             # Mandatory fallback for the current generation of FITS files
-            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
             
         return data, seeing_vals, modal_radius_vals
 
@@ -943,7 +943,8 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
 
 def double_interpolation_sigma_slope(modal_radius_vals, seeing_vals, data_slopes, 
                                      modulation_radius, seeing):
-    
+       
+       
     interp_sigma = RegularGridInterpolator((modal_radius_vals, seeing_vals), data_slopes[1,:,:], 
                                            bounds_error=False, fill_value=None) 
     sigma_slope_aliasing = float(interp_sigma((modulation_radius, seeing)))       
