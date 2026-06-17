@@ -38,7 +38,7 @@ data:
   # Path to modulation models (mod0 and mod4)
   optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
   # Path to sigma slopes from aliasing
-  sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+  sigma_slopes: "src/file_fits/ANDES/slopes_std_time_avg_all.fits"
 
 plant:
   # Numerator polynomial coefficients of the plant transfer function

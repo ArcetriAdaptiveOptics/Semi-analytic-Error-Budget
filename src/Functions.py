@@ -30,7 +30,7 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'src',
     'file_fits',
     'ANDES',
-    'slopes_rms_time_avg_all.fits' 
+    'slopes_std_time_avg_all.fits' 
 )
 DEFAULT_ALIASING_ALPHA = - 17 / 3   
 DEFAULT_PARALLEL_FRACTION = 0.25
@@ -934,7 +934,12 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
             modal_radius_vals = hdul[1].data
         else:
             # Mandatory fallback for the current generation of FITS files
-            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+        
+        # Sort modal_radius_vals in ascending order and reorder data accordingly
+        sort_idx = np.argsort(modal_radius_vals)
+        modal_radius_vals = modal_radius_vals[sort_idx]
+        data = data[:, sort_idx, :]  # Reorder data along the modal_radius axis
             
         return data, seeing_vals, modal_radius_vals
 
