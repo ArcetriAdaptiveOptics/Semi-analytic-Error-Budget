@@ -30,7 +30,7 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'src',
     'file_fits',
     'ANDES',
-    'slopes_rms_time_avg_all.fits' 
+    'slopes_std_time_avg_all.fits' 
 )
 DEFAULT_ALIASING_ALPHA = - 17 / 3   
 DEFAULT_PARALLEL_FRACTION = 0.25

@@ -67,8 +67,7 @@ binning_configs:
     n_modes: 630
     n_subapert: 40
     reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn630_noise_prop_coeff.fits"
-    sigma_slopes: "src/file_fits/LBT/soul_slopes_rms_time_avg_all_b1.fits"
-    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b1.fits"
     optical_gain_models:
       - "src/file_fits/LBT/SOUL_og_mod0_ext630.fits"
       - "src/file_fits/LBT/SOUL_og_mod3_ext630.fits"
@@ -76,8 +75,7 @@ binning_configs:
     n_modes: 209
     n_subapert: 20
     reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr20x20_wl750_fv2.1_ma3_bn2_mn209_noise_prop_coeff.fits"
-    sigma_slopes: "src/file_fits/LBT/soul_slopes_rms_time_avg_all_b2.fits"
-    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b2.fits"
     optical_gain_models:
       - "src/file_fits/LBT/SOUL_og_mod0_bn2.fits"
       - "src/file_fits/LBT/SOUL_og_mod3_bn2.fits"
@@ -85,8 +83,7 @@ binning_configs:
     n_modes: 90
     n_subapert: 13
     reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr13x13_wl750_fv2.1_ma3_bn3_mn90_noise_prop_coeff.fits"
-    sigma_slopes: "src/file_fits/LBT/soul_slopes_rms_time_avg_all_b3.fits"
-    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b3.fits"
     optical_gain_models:
       - "src/file_fits/LBT/SOUL_og_mod0_bn3.fits"
       - "src/file_fits/LBT/SOUL_og_mod3_bn3.fits"
@@ -94,8 +91,7 @@ binning_configs:
     n_modes: 54
     n_subapert: 10
     reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr10x10_wl750_fv2.1_ma3_bn4_mn54_noise_prop_coeff.fits"
-    sigma_slopes: "src/file_fits/LBT/soul_slopes_rms_time_avg_all_b4.fits"
-    modal_psd_alias: "src/file_fits/LBT/modal_psd_all_SOUL.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b4.fits"
     optical_gain_models:
       - "src/file_fits/LBT/SOUL_og_mod0_bn4.fits"
       - "src/file_fits/LBT/SOUL_og_mod3_bn4.fits"
