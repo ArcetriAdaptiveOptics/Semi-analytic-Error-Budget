@@ -935,6 +935,11 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
         else:
             # Mandatory fallback for the current generation of FITS files
             modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+        
+        # Sort modal_radius_vals in ascending order and reorder data accordingly
+        sort_idx = np.argsort(modal_radius_vals)
+        modal_radius_vals = modal_radius_vals[sort_idx]
+        data = data[:, sort_idx, :]  # Reorder data along the modal_radius axis
             
         return data, seeing_vals, modal_radius_vals
 

@@ -326,7 +326,7 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     else:
         input_PSD_available = False
 
-    var_total_modes = var_fit_modes + var_temp_modes + var_alias_modes + var_meas_modes
+    var_total_modes = var_temp_modes + var_alias_modes + var_meas_modes
     if var_vibr_modes is not None:
         var_total_modes = var_total_modes + var_vibr_modes
 
@@ -738,7 +738,7 @@ def plot_variance_vs_modes(PSD_out_temp, PSD_out_vibr, PSD_out_alias, PSD_out_me
     n_modes = actuators_number
     var_fit_modes = np.full(n_modes, np.real(var_fit) / n_modes)
     
-    var_total_modes = var_temp_modes + var_alias_modes + var_meas_modes + var_fit_modes
+    var_total_modes = var_temp_modes + var_alias_modes + var_meas_modes
   
     # total_temp_variance = np.sum(var_temp_modes)
     # total_vibr_variance = np.sum(var_vibr_modes)
