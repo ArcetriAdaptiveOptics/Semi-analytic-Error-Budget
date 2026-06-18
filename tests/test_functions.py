@@ -708,7 +708,7 @@ class TestBuildOpticalGainGrid(_ChdirMixin, unittest.TestCase):
 class TestReadSigmaSlopes(_ChdirMixin, unittest.TestCase):
     """read_sigma_slopes reads slope RMS data from FITS."""
 
-    FILE = "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+    FILE = "src/file_fits/ANDES/slopes_std_time_avg_all.fits"
 
     def test_returns_ndarray_and_axes(self):
         """Verifies that the function returns three ndarrays (data, seeing_axis, mod_radius_axis)."""
