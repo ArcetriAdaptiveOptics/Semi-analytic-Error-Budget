@@ -7,8 +7,6 @@ Created on Wed Nov 12 15:43:33 2025
 """
 # pylint: disable=C
 
-#from dataclasses import dataclass, field
-
 import yaml
 import os
 import numpy as np
@@ -32,8 +30,7 @@ DEFAULT_SIGMA_SLOPES_PATH = os.path.join(
     'ANDES',
     'slopes_std_time_avg_all.fits' 
 )
-DEFAULT_ALIASING_ALPHA = - 17 / 3   
-#DEFAULT_PARALLEL_FRACTION = 0.25
+DEFAULT_ALIASING_ALPHA = - 17 / 3
 
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
@@ -934,8 +931,8 @@ def read_sigma_slopes(file_path_sigma_slopes=None):
             modal_radius_vals = hdul[1].data
         
         else:
-            # Mandatory fallback for the current generation of FITS files
-            modal_radius_vals = np.array([0.0, 1.0, 2.0, 3.0, 4.0, 8.0])
+            raise ValueError("Modulation radius values are not found in the FITS file. "
+                             "Please ensure the FITS file contains the modulation radius axis in HDU 1.")
         
         # Sort modal_radius_vals in ascending order and reorder data accordingly
         sort_idx = np.argsort(modal_radius_vals)
