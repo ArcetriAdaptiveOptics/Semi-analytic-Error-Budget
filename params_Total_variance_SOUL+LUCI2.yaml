@@ -136,5 +136,4 @@ display:
   summary_modes_to_plot: null
   # Enable legacy plots/checks in addition to the new summary display
   show_legacy_plots: true
-  # Enable/disable PSD windshake
-  enable_PSD_vibr: true
+

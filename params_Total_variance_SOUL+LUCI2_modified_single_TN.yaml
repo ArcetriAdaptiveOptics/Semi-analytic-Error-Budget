@@ -89,4 +89,3 @@ display:
   enabled: true
   summary_modes_to_plot: null
   show_legacy_plots: true
-  enable_PSD_vibr: true

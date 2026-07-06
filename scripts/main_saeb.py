@@ -318,7 +318,7 @@ def run(yaml_file):
         c_optg,
     )
 
-    total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
+    total_variance(var_fit, var_temp_atmo_CL, var_alias_CL, var_meas_CL)
 
     result = {
         'var_fit':   float(np.real(var_fit)),
@@ -327,7 +327,7 @@ def run(yaml_file):
         'var_alias': float(np.real(var_alias_CL)),
         'var_meas':  float(np.real(var_meas_CL)),
         'var_total': float(np.real(
-            var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
+            var_fit + var_temp_atmo_CL + var_alias_CL + var_meas_CL
         )),
     }
 
@@ -340,6 +340,7 @@ def run(yaml_file):
     var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes_display = var_temp_modes.size
     var_fit_modes = np.full(n_modes_display, np.real(var_fit) / n_modes_display)
+    
 
     summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_modes,
                     PSD_out_temp_atmo, PSD_out_alias, PSD_out_meas,
