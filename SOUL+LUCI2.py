@@ -18,10 +18,10 @@ from scripts.main_saeb import run
 
 def to_native_endian(array):
     """
-    Converte un array NumPy nel formato endian nativo della macchina.
-     Serve perché alcuni dati letti da file IDL .sav possono essere
-    big-endian, mentre Pandas su macchine little-endian può dare errore
-    durante operazioni come groupby.
+    Converts a NumPy array into the machine's native endian format.
+    This is needed because some data read from IDL .sav files can be
+    big-endian, while Pandas on little-endian machines may raise errors
+    during operations such as groupby.
     """
     array = np.asarray(array)
 
@@ -33,7 +33,7 @@ def to_native_endian(array):
 
 def decode_bytes_array(array):
     """
-    Converte un array di byte in normali stringhe Python.
+    Converts a byte array into standard Python strings.
     """
 
     result = []
