@@ -318,7 +318,7 @@ def run(yaml_file):
         c_optg,
     )
 
-    total_variance(var_fit, var_temp_atmo_CL, var_alias_CL, var_meas_CL)
+    total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 
     result = {
         'var_fit':   float(np.real(var_fit)),
@@ -327,7 +327,7 @@ def run(yaml_file):
         'var_alias': float(np.real(var_alias_CL)),
         'var_meas':  float(np.real(var_meas_CL)),
         'var_total': float(np.real(
-            var_fit + var_temp_atmo_CL + var_alias_CL + var_meas_CL
+            var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
         )),
     }
 

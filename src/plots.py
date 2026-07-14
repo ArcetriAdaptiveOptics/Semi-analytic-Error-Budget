@@ -327,8 +327,8 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
         input_PSD_available = False
 
     var_total_modes = var_fit_modes + var_temp_modes + var_alias_modes + var_meas_modes
-    # if var_vibr_modes is not None:
-    #     var_total_modes = var_total_modes + var_vibr_modes
+    if var_vibr_modes is not None:
+        var_total_modes = var_total_modes + var_vibr_modes
 
     fit_total = np.sum(var_fit_modes)
     temp_total = np.sum(var_temp_modes)
