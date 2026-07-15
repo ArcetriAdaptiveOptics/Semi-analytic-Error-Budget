@@ -17,7 +17,7 @@ from scripts.main_saeb import run
 
 
 
-analysis_mode = "single"
+analysis_mode = "all"
 
 # =============================================================================
 # FUNCTIONS

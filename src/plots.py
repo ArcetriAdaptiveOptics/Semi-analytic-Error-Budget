@@ -326,7 +326,7 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     else:
         input_PSD_available = False
 
-    var_total_modes = var_fit_modes + var_temp_modes + var_alias_modes + var_meas_modes
+    var_total_modes =  var_temp_modes + var_alias_modes + var_meas_modes
     if var_vibr_modes is not None:
         var_total_modes = var_total_modes + var_vibr_modes
 
@@ -335,7 +335,7 @@ def summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_mod
     alias_total = np.sum(var_alias_modes)
     meas_total = np.sum(var_meas_modes)
     vibr_total = np.sum(var_vibr_modes) if var_vibr_modes is not None else None
-    total_variance_sum = np.sum(var_total_modes)
+    total_variance_sum = np.sum(var_total_modes) + fit_total
 
     print("\n===== CLOSED-LOOP SUMMARY =====")
     print(f"N_modes: {n_modes}")
