@@ -42,7 +42,7 @@ from src.plots import optg_soul_comparison
 from src.plots import plot_variance_vs_modes
 from src.config_utils import resolve_binning_config
 
-system = "ANDES"
+system = "SOUL"
 
 if system == "ANDES":
 
