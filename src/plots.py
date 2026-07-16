@@ -519,8 +519,10 @@ def check(reconstruction_matrix_path, telescope_diameter, seeing, target_modulat
 def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, telescope_diameter,
                            seeing, target_modulation_radius, wind_speed, maximum_radial_order_corrected,
                            magnitudo,reconstruction_matrix_path, c_optg, sigma_slopes_path,
-                           modal_psd_aliasing_path):
+                           modal_psd_aliasing_path=None):
 
+    if modal_psd_aliasing_path is None:
+        return
     
     with fits.open(modal_psd_aliasing_path) as hdul:
         data = hdul[0].data # pylint: disable=no-member
