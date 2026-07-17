@@ -1,0 +1,93 @@
+telescope:
+  # Primary mirror diameter in [m]
+  telescope_diam: 38.5
+  # Collecting area of ELT in [m^2]
+  collect_area: 1000
+
+atmosphere:
+  # Outer scale in [m]
+  outer_scale: 25
+  # Wind speed in [m/s]
+  wind_speed: 8
+  # Seeing in [arcsec]
+  seeing: 0.8
+
+wavefront_sensor:
+  # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
+  value_for_F_excess_noise: 1
+  # Sky background in [photo-electrons]
+  sky_backgr: 0
+  # Dark current in [photo-electrons]
+  dark_curr: 0
+  # Readout noise in [photo-electrons]
+  noise_readout: 5
+  # Number of sub apertures on the diameter of the telescope
+  number_of_sub: 100
+  # Modulation radius [lambda/D]
+  modulation_radius: 3
+
+guide_star:
+  # Number of photons per second per collecting area
+  flux_photons: 9.0e12
+  # Guide star magnitude
+  magn: 7
+
+data:
+  # Path to reconstruction matrix or noise propagation coefficients vector
+  reconstruction_matrix: "src/file_fits/ANDES/ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits"
+  # Path to wind-shake PSD (tip and tilt)
+  windshake_psd: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
+  # Path to modulation models (mod0 and mod4)
+  optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
+  # Path to sigma slopes from aliasing
+  sigma_slopes: "src/file_fits/ANDES/slopes_rms_time_avg_all.fits"
+
+plant:
+  # Denominator polynomial coefficients of the W transfer function
+  d_1: [1]
+  # Denominator polynomial coefficients of the M transfer function
+  d_3: [1]
+  # Numerator polynomial coefficients of the W transfer function
+  n_1: [1]
+  # Numerator polynomial coefficients of the R transfer function
+  n_2: [1]
+  # Numerator polynomial coefficients of the M transfer function
+  n_3: [1]
+
+frequency_ranges:
+  # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
+  temporal_freqs_min: -3
+  temporal_freqs_n: 1000
+  # Note: maximum is retrieved from sampling_time
+
+control:
+  # Number of corrected modes
+  n_modes: 2
+  # Sampling time in [s] — also sets the Nyquist frequency
+  sampling_time: 0.001
+  # Weights on the 4 pyramid pixels used by the slope computer.
+  # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
+  slope_computer_weights: [1, 0, 0, 0]
+  # Gain: set gain_n: 1 and gain_min for a single uniform gain for all modes
+  # gain_min: 0.01
+  gain_n: 1
+  # Total delay (WFS + RTC + DM) in [s]
+  total_delay: 3
+
+optimization:
+  # Controller type: 1 - integral controller; 2 - standard controller
+  ctrl_type: 2
+  # order value for numerators and denarators of standard controller
+  order: [1, 2]
+
+system:
+  # ANDES or SOUL
+  name: "ANDES"
+
+display:
+  # Enable/disable all visualization blocks
+  enabled: true
+  # Modes shown in summary plots (null => automatic selection)
+  summary_modes_to_plot: null
+  # Enable legacy plots/checks in addition to the new summary display
+  show_legacy_plots: true
