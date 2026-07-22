@@ -15,9 +15,13 @@ import yaml
 from src.Functions import load_parameters
 from scripts.main_saeb import run
 
+# Show all DataFrame columns when printing
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", None)
+pd.set_option("display.max_colwidth", None)
 
 
-analysis_mode = "all"
+analysis_mode = "single"
 
 # =============================================================================
 # FUNCTIONS
@@ -62,17 +66,9 @@ def decode_bytes_array(array):
 def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
    
     param = load_parameters("params_Total_variance_SOUL_LUCI2.yaml")
-
-    # seeing
     param["atmosphere"]["seeing"] = float(seeing)
-
-    # magnitude
     param["guide_star"]["magn"] = float(magnitude)
-
-    # binning
     param["control"]["bin"] = int(binning)
-
-    # sampling time
     sampling_time = 1.0 / float(ao_framerate)
     param["control"]["sampling_time"] = sampling_time
 
@@ -158,10 +154,20 @@ if analysis_mode == "single":
     print("\nOUTPUT:", output)
     
     table = Table([output])
-    
+
+    # Save FITS
     table.write("src/file_fits/LBT/SAEB_results_single_TN.fits", overwrite=True)
     
-    #print ("TABLE:", table)
+    # Save CSV
+    df_output = table.to_pandas()
+    df_output.to_csv("src/file_fits/LBT/SAEB_results_single_TN.csv", index=False)
+    
+    print("\nSingle TN results:")
+    print(df_output)
+    
+    print("\nFiles saved:")
+    print("- SAEB_results_single_TN.fits")
+    print("- SAEB_results_single_TN.csv")
     
 
 elif analysis_mode == "all":
@@ -239,12 +245,23 @@ elif analysis_mode == "all":
     
     
     table = Table(rows=summary)
+
+    # Save FITS
     table.write("src/file_fits/LBT/SAEB_results_all_groups.fits", overwrite=True)
     
-    print("TABLE:", table)
-    print("\nFile FITS saved with", len(summary), "groups.")
+    # Save CSV
+    df_summary = table.to_pandas()
+    df_summary.to_csv("src/file_fits/LBT/SAEB_results_all_groups.csv", index=False)
     
+    print("\nSummary table:")
+    print(df_summary)
     
+    print("\nFiles saved:")
+    print("- SAEB_results_all_groups.fits")
+    print("- SAEB_results_all_groups.csv")
+    print("Number of groups:", len(summary))
+        
+        
 
 
 
