@@ -174,6 +174,8 @@ def run(yaml_file):
     display_cfg = param.get('display', {})
     display = bool(display_cfg.get('enabled', True))
     summary_modes_to_plot = display_cfg.get('summary_modes_to_plot', None)
+    # image wavelength in nm for strehl ratio estimation
+    wavelength_nm = display_cfg.get('wavelength_nm', 2200)  # Default to 2200 nm if not provided
 
     if summary_modes_to_plot is not None and not isinstance(summary_modes_to_plot, (list, tuple, np.ndarray)):
         summary_modes_to_plot = None
@@ -318,8 +320,10 @@ def run(yaml_file):
         c_optg,
     )
 
-    total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
+    var_tot = total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 
+    sr_estimation = np.exp(-(np.sqrt(np.real(var_tot))*2*np.pi/wavelength_nm)**2)
+    
     result = {
         'var_fit':   float(np.real(var_fit)),
         'var_temp':  float(np.real(var_temp_atmo_CL)),
@@ -329,6 +333,7 @@ def run(yaml_file):
         'var_total': float(np.real(
             var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
         )),
+        'sr_estimation': float(np.real(sr_estimation)),
     }
 
     if not display:

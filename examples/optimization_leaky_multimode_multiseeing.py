@@ -32,27 +32,23 @@ Created on 2026-05-03 14:59
 from datetime import datetime
 import os
 import numpy as np
-import control as ct
 from scipy.optimize import dual_annealing
 import matplotlib.pyplot as plt
 from src.initialization_utils import (
-    init_parameters, 
+    init_parameters,
+    init_optimization_context, 
     print_psd_RMS_terms)
 from src.control_plot import (
     bodeplot_Hz,
     set_psd_plot_title_text,
-    plot_psds_single_mode,
-    plot_nyquist)
-from src.initialization_utils import init_optimization_context
+    plot_psds_single_mode)
 from src.table_utilis import rms_data_singlemode, save_rms_table_vertical
+from src.control_utils import cost
 
 # DEFAULT_SRC_PATH = os.path.dirname(__file__)
-DEFAULT_FIG_PATH =  r'/raid2/jlin/ANDES/sensor_fusion/EBO'
+DEFAULT_FIG_PATH =  'ANDES/sensor_fusion/EBO'
 # DEFAULT_FITTING_COEFF = 0.28
-DEFAULT_TABLE_PATH = r'/raid2/jlin/ANDES/sensor_fusion/EBO'
-
-from src.Functions import load_parameters
-from src.control_utils import cost
+DEFAULT_TABLE_PATH = 'ANDES/sensor_fusion/EBO'
 
 def optimization_leaky_multimode_multiseeing(
     param_dir='params_mod4_leaky_seeing_0.4.yaml',
@@ -65,7 +61,7 @@ def optimization_leaky_multimode_multiseeing(
     # 1. Load parameters and initialize the parameters
     init_params=init_parameters(param_dir)
     all_rms_data = []
-    
+
     if seeing_set is None:
         seeing_set = [init_params['seeing']]
     
@@ -216,7 +212,7 @@ def optimization_leaky_multimode_multiseeing(
             
             save_fig_param = {
                 'save_fig': save_fig,
-                'fig_name': f"TF_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_mode_{mode_index}_leaky.png",
+                'fig_name': f"TF_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_mag_{init_params['magnitude']}_mode_{mode_index}_leaky.png",
                 'fig_folder': os.path.join(DEFAULT_FIG_PATH, 'figures'),
                 'dpi': 300
             }
@@ -237,7 +233,7 @@ def optimization_leaky_multimode_multiseeing(
         
             save_fig_param = {
                 'save_fig': save_fig,
-                'fig_name': f"PSD_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_mode_{mode_index}_leaky.png",
+                'fig_name': f"PSD_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_mag_{init_params['magnitude']}_mode_{mode_index}_leaky.png",
                 'fig_folder': os.path.join(DEFAULT_FIG_PATH, 'figures'),
                 'dpi': 300
             }
@@ -270,7 +266,7 @@ def optimization_leaky_multimode_multiseeing(
         
         if save_table is True: 
             timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-            table_name =f"Result_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_leaky_{timestamp}.xlsx"
+            table_name =f"Result_ModRad_{init_params['modulation_radius']}_seeing_{init_params['seeing']}_mag_{init_params['magnitude']}_leaky_{timestamp}.xlsx"
             table_name_full_path = os.path.join(DEFAULT_TABLE_PATH, 'tables', table_name)
             save_table_param = {
                             'table_name': table_name_full_path,
@@ -288,7 +284,7 @@ def optimization_leaky_multimode_multiseeing(
 
 if __name__ == "__main__":
     obj_to_optimize = optimization_leaky_multimode_multiseeing(
-        param_dir = 'config_yaml/Multi_mag_ModRad3/params_4000modes_ModRad_3_mag_6.yaml',
+        param_dir = 'config_yaml/Multi_mag_ModRad3/params_4000modes_ModRad_3_mag_16.yaml',
         mode_index_set=[0, 2, 100, 200, 400, 700, 1000, 2000, 3000, 3999], 
         seeing_set=[0.4, 0.6, 0.8, 1.0, 1.2, 1.4],
         save_fig=True,

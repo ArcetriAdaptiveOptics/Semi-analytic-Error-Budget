@@ -35,14 +35,15 @@ DEFAULT_ALIASING_ALPHA = - 17 / 3
 
 # Reads the YAML file (where parameters are listed) and returns a dictionary.
 
-def load_parameters(yaml_file):
+def load_parameters(yaml_file,verbose=False):
     
     with open(yaml_file, 'r', encoding='utf-8') as stream:                     
                                                                                
         try: 
             
             parameters = yaml.safe_load(stream)
-            print("Parameters loaded successfully.")                                
+            if verbose:
+                print("Parameters loaded successfully.")
             return parameters
         
         except yaml.YAMLError as exc:
@@ -396,9 +397,6 @@ def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
         plant_num,
         plant_den,
     )
-    
-    # H_r = H_r[0]
-    # H_n = H_n[0]
     
     return H_r, H_n
     

@@ -10,48 +10,7 @@ Utility functions for control system calculations
 
 import numpy as np
 import control as ct
-
-# def control_param_initial(param, controller_type, n_actuators):
-#     if controller_type is not None:
-#         if controller_type == 1:  # integral controller
-#             gain_value = param['control'].get('gain_value')
-#             if gain_value is not None:
-#                 gain_array = np.full(n_actuators, float(np.asarray(gain_value).ravel()[0]))
-#                 ctrl_num_array = None
-#                 ctrl_den_array = None
-#             else:
-#                 gain_array = np.full(n_actuators, float(param['control']['gain_min']))
-#                 ctrl_num_array = None
-#                 ctrl_den_array = None
-#         elif controller_type == 2: # polynomial controller
-#             ctrl_order = param['optimization'].get('order')
-#             if ctrl_order is not None:
-#                 gain_array = None
-#                 n_num_poly = ctrl_order[0] + 1
-#                 n_den_poly = ctrl_order[1] + 1
-#                 ctrl_num_array = np.zeros(n_num_poly, dtype=float)
-#                 ctrl_num_array[0] = 1.0
-#                 ctrl_den_array = np.zeros(n_den_poly, dtype=float)
-#                 ctrl_den_array[0] = 1.0  
-#             else:
-#                 raise ValueError("Provide controller's order (polynomial controller)")
-#         elif controller_type == 3:  # leaky integral controller
-#             ff_leaky = param['optimization'].get('ff_leaky')
-#             gain_leaky = param['optimization'].get('gain_leaky')
-#             if ff_leaky is None or gain_leaky is None:
-#                 raise ValueError("Provide both forgetting factor and gain (leaky integral controller)")
-#             else:
-#                 ctrl_num_array = np.zeros(2, dtype=float)
-#                 ctrl_den_array = np.zeros(2, dtype=float)
-#                 ctrl_num_array[0] = gain_leaky 
-#                 ctrl_den_array[0] = 1
-#                 ctrl_den_array[1] = -ff_leaky            
-#         else:
-#             raise ValueError("Provide wrong 'ctrl_type'. Please check. ")
-#     else:
-#         raise ValueError("Provide 'ctrl_type' ")   
-#     return
-
+from control import ss
 
 def control_CL_tf_margin(
     SingleModeControlOptimization,
@@ -141,7 +100,8 @@ def control_CL_tf_margin(
 def cost(obj_to_optimize, 
          sm_target=None,
          gm_target=None,
-         weight_cost=None,   
+         weight_cost=None,
+         verbose=False,
          **controller_param):
     
     result_control_CL_tf = control_CL_tf_margin(
@@ -217,13 +177,13 @@ def cost(obj_to_optimize,
                     + H_r_tf_peak_penalty * weight_cost[4]
                     + gm_penalty * weight_cost[5])
     
-    print(f"\nTotal cost: {cost_function}")
-    print(f"- Error variance (without fitting): {cost_variance_without_fitting}")
-    print(f"- Stability penalty: {stability_penalty}")
-    print(f"- Stability margin penalty: {sm_penalty}")
-    print(f"- Gain margin penalty: {gm_penalty}")
+    if verbose:
+        print(f"\nTotal cost: {cost_function}")
+        print(f"- Error variance (without fitting): {cost_variance_without_fitting}")
+        print(f"- Stability penalty: {stability_penalty}")
+        print(f"- Stability margin penalty: {sm_penalty}")
+        print(f"- Gain margin penalty: {gm_penalty}")
     
-    # return [cost_function, cost_variance_result, stability_penalty, sm_penalty, H_r_tf, H_n_tf, H_n_tf_peak_penalty]
     return {
         "cost_function_value":
             cost_function,
@@ -255,30 +215,37 @@ def compute_close_loop_peak_penalty(
         raise ValueError("Provide both close-loop transfer function and close loop peak limitation")
     
     issues = []
+    
+    try:
+        H_cl_ss = ss(H_cl_tf)    # transfer function to state-space
+    except:
+        issues.append("Cannot convert to state-space form")
+        return issues
+    
     # check feedthrough
-    if hasattr(H_cl_tf, 'D'):
-        if not np.allclose(H_cl_tf.D, 0):
+    if hasattr(H_cl_ss, 'D'):
+        if not np.allclose(H_cl_ss.D, 0):
             issues.append("System has non-zero feedthrough (D ≠ 0)")
     
     # check if system is stable
-    if hasattr(H_cl_tf, 'A'):
-        eigvals = np.linalg.eigvals(H_cl_tf.A)
+    if hasattr(H_cl_ss, 'A'):
+        eigvals = np.linalg.eigvals(H_cl_ss.A)
         if np.max(np.real(eigvals)) >= 0:
             issues.append("System is not stable")
     
     # check if system is proper
-    if hasattr(H_cl_tf, 'D'):
-        if H_cl_tf.D.shape[0] != H_cl_tf.D.shape[1]:
-            issues.append(f"Non-square D matrix: {H_cl_tf.D.shape}")
+    if hasattr(H_cl_ss, 'D'):
+        if H_cl_ss.D.shape[0] != H_cl_ss.D.shape[1]:
+            issues.append(f"Non-square D matrix: {H_cl_ss.D.shape}")
     
      # check numerical conditioning
-    if hasattr(H_cl_tf, 'D') and H_cl_tf.D.size > 0:
+    if hasattr(H_cl_ss, 'D') and H_cl_ss.D.size > 0:
         try:
-            cond_num = np.linalg.cond(H_cl_tf.D)
+            cond_num = np.linalg.cond(H_cl_ss.D)
             if cond_num > 1e10:
                 issues.append(f"Poorly conditioned D matrix: cond={cond_num}")
-        except:
-            pass
+        except Exception as e:
+            issues.append(f"Cannot compute condition number: {str(e)}")
     
     if issues:
         print("\n=== Issues found with closed-loop system ===")
