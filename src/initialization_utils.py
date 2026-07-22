@@ -213,8 +213,7 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
         'plant_tf': plant_tf,
         'plant_num': plant_num,
         'plant_den': plant_den,
-        'controller_type': controller_type,
-        'wavelength_nm': wavelength_nm
+        'controller_type': controller_type
     }
     
     merged_dict = {**main_dict, **control_dirt}
@@ -249,8 +248,7 @@ def init_optimization_context(init_params, mode_index):
         file_path_sigma_slopes=init_params.file_path_sigma_slopes,
         # static_fit_variance=init_params.static_fit_variance,
         plant_num=init_params.plant_num,
-        plant_den=init_params.plant_den,
-        wavelength_nm=init_params.wavelength_nm
+        plant_den=init_params.plant_den
     )
     return obj_to_optimize
 
