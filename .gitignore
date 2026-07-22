@@ -209,3 +209,4 @@ __marimo__/
 *.code-workspace
 *.swp
 /.vscode
+examples/optimization_leaky_singlemode.py
