@@ -89,7 +89,7 @@ mod_radii_soul = param['wavefront_sensor'].get('modal_radius_soul', None)
 file_path_R1 = param['data']['reconstruction_matrix'] 
 file_sigma_slope = param['data']['sigma_slopes']
 file_path_wind = param['data']['windshake_psd']
-file_modal_psd_alias_path = param['data']['modal_psd_alias']
+file_modal_psd_alias_path = param['data'].get('modal_psd_alias', None)
 file_optg = param['data'].get('optical_gain_models', None)
 file_optg_cube = param['data'].get('optical_gain_cube', None)
 if file_optg is not None and file_optg_cube is not None:

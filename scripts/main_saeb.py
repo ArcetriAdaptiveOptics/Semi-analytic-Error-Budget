@@ -340,6 +340,7 @@ def run(yaml_file):
     var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes_display = var_temp_modes.size
     var_fit_modes = np.full(n_modes_display, np.real(var_fit) / n_modes_display)
+    
 
     summary_display(var_fit_modes, var_temp_modes, var_alias_modes, var_meas_modes,
                     PSD_out_temp_atmo, PSD_out_alias, PSD_out_meas,

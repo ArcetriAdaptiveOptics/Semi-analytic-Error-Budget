@@ -1,0 +1,139 @@
+telescope:
+  # Primary mirror diameter in [m]
+  telescope_diam: 8.222
+
+atmosphere:
+  # Outer scale in [m]
+  outer_scale: 25
+  # Wind speed in [m/s]
+  wind_speed: 8
+  # Seeing in [arcsec]
+  seeing: 0.8
+
+wavefront_sensor:
+  # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
+  value_for_F_excess_noise: 2
+  # Sky background in [photo-electrons]
+  sky_backgr: 0
+  # Dark current in [photo-electrons]
+  dark_curr: 0
+  # Readout noise in [photo-electrons]
+  noise_readout: 0.2
+  # Number of sub apertures on the diameter of the telescope
+  number_of_sub: 0 # NOTE: defined in binning_configs
+  # Modulation radius [lambda/D]
+  modulation_radius: 3
+  # Modal radius for optg grid
+  modal_radius_soul: [0.0, 3.0]
+
+guide_star:
+  # Number of photons per second per m^2 including total throughput
+  flux_photons: 6e9
+  # Guide star magnitude
+  magn: 7.5
+
+data:
+  # Path to reconstruction matrix or noise propagation coefficients vector
+  reconstruction_matrix: "" # NOTE: defined in binning_configs
+  # Path to wind-shake PSD (tip and tilt)
+  windshake_psd: "src/file_fits/LBT/LBTelabVibrations_2019.fits"
+  # Path to sigma slopes from aliasing
+  sigma_slopes: "" # NOTE: defined in binning_configs
+  # Path to SOUL optical gain cube
+  #    Note that the cube should be provided if no optical gain models are given,
+  #    and vice versa. If both are provided, an error is raised.
+  # optical_gain_cube: "src/file_fits/LBT/SOUL_OPTG.fits"
+  # Path to SOUL modulation models (binning 1, mod0 and mod3)
+  optical_gain_models: ["", ""] # NOTE: defined in binning_configs
+  # Path to modal PSD_aliasing from specula 
+  modal_psd_alias: "" # NOTE: defined in binning_configs
+
+# ---------------------------------------------------------------------------
+# Optional binning configuration table.
+#
+# When this section is present, setting control.bin to 1, 2, 3, or 4 is
+# sufficient to switch the full detector-binning configuration: n_modes,
+# n_subapert, reconstruction matrix, sigma slopes, modal aliasing PSD, and
+# optical-gain files are all overwritten automatically before the run starts.
+#
+# The flat parameters in the sections above remain as fallback / legacy values
+# and are used unchanged when this section is absent.
+#
+# Sub-aperture counts per binning:  1x1 -> 40,  2x2 -> 20,  3x3 -> 13,  4x4 -> 10
+# Corrected modes per binning    :  1x1 -> 300, 2x2 -> 209, 3x3 -> 90,  4x4 -> 54
+# ---------------------------------------------------------------------------
+binning_configs:
+  1:
+    n_modes: 630
+    n_subapert: 40
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr40x40_wl750_fv2.1_ma3_bn1_mn630_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b1.fits"
+    modal_psd_alias:  "src/file_fits/LBT/modal_psd_aliasing_b1.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_ext630.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_ext630.fits"
+  2:
+    n_modes: 209
+    n_subapert: 20
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr20x20_wl750_fv2.1_ma3_bn2_mn209_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b2.fits"
+    modal_psd_alias:  "src/file_fits/LBT/modal_psd_aliasing_b2.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn2.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn2.fits"
+  3:
+    n_modes: 90
+    n_subapert: 13
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr13x13_wl750_fv2.1_ma3_bn3_mn90_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b3.fits"
+    modal_psd_alias:  "src/file_fits/LBT/modal_psd_aliasing_b3.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn3.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn3.fits"
+  4:
+    n_modes: 54
+    n_subapert: 10
+    reconstruction_matrix: "src/file_fits/LBT/SOUL_pyr10x10_wl750_fv2.1_ma3_bn4_mn54_noise_prop_coeff.fits"
+    sigma_slopes: "src/file_fits/LBT/soul_slopes_std_time_avg_all_b4.fits"
+    modal_psd_alias:  "src/file_fits/LBT/modal_psd_aliasing_b4.fits"
+    optical_gain_models:
+      - "src/file_fits/LBT/SOUL_og_mod0_bn4.fits"
+      - "src/file_fits/LBT/SOUL_og_mod3_bn4.fits"
+
+plant:
+  # Numerator polynomial coefficients of the plant transfer function
+  numerator: [1]
+  # Denominator polynomial coefficients of the plant transfer function
+  denominator: [1]
+  # Total delay (WFS + RTC + DM) in [frames]
+  total_delay: 2
+
+frequency_ranges:
+  # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
+  temporal_freqs_min: -3
+  temporal_freqs_n: 1000
+  # Note: maximum is retrieved from sampling_time
+
+control:
+  # Number of corrected modes
+  n_modes: 0 # NOTE: defined in binning_configs
+  # Sampling time in [s] — also sets the Nyquist frequency
+  sampling_time: 0.000666
+  # Weights on the 4 pyramid pixels used by the slope computer.
+  # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
+  slope_computer_weights: [1, 1, 1, 1]
+  # Gain policy: block_optimization means one optimized gain per block.
+  gain_mode: block_optimization
+  gain_min: 0.01
+  gain_block_sizes: [2, null] # null means "all remaining modes"
+  # Binning
+  bin: 1
+
+display:
+  # Enable/disable all visualization blocks
+  enabled: true
+  # Modes shown in summary plots (null => automatic selection)
+  summary_modes_to_plot: null
+  # Enable legacy plots/checks in addition to the new summary display
+  show_legacy_plots: true
+
