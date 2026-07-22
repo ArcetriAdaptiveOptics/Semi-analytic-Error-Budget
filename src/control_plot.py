@@ -167,41 +167,6 @@ def bodeplot_Hz(
     fig.set_tight_layout(True)
     
     return fig, (ax1, ax2)
-
-def psd_compare( 
-        omega,
-        t_0,
-        n_actuators,
-        plant_num,
-        plant_den,
-        gain=None,
-        controller_num=None,
-        controller_den=None,
-        ):
-    
-    if gain is not None:
-        H_r, H_n = build_transfer_function(
-        omega,
-        t_0,
-        n_actuators,
-        plant_num,
-        plant_den,
-        gain=gain,
-    )
-    elif controller_num is not None and controller_den is not None:
-        H_r, H_n = build_transfer_function(
-        omega,
-        t_0,
-        n_actuators,
-        plant_num,
-        plant_den,
-        controller_num=controller_num,
-        controller_den=controller_den,
-    )
-    else:
-        raise ValueError(
-            "Provide either 'gain' (integrator) or both "
-            "'controller_num' and 'controller_den'")
         
 def set_psd_plot_title_text(controller_type, mode_index, **title_text_params):
     

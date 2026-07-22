@@ -30,20 +30,12 @@ class MockControlOptimization:
     def __init__(
         self,
         t_0=0.001,
-        num1=None, den1=None,
-        num2=None, den2=None,
-        num3=None, den3=None
+        plant_num=None, plant_den=None
     ):
         self.t_0 = t_0
-        # WFS (Wavefront Sensor)
-        self.num1 = num1 if num1 is not None else np.array([1.0])
-        self.den1 = den1 if den1 is not None else np.array([1.0, 0.1])
-        # ASM (Deformable Mirror/Actuator)
-        self.num2 = num2 if num2 is not None else np.array([1.0])
-        self.den2 = den2 if den2 is not None else np.array([1.0, 0.2])
-        # RTC (Real-Time Computer)
-        self.num3 = num3 if num3 is not None else np.array([1.0])
-        self.den3 = den3 if den3 is not None else np.array([1.0, 0.3])
+        # Plant transfer function coefficients
+        self.plant_num = plant_num if plant_num is not None else np.array([1.0])
+        self.plant_den = plant_den if plant_den is not None else np.array([1.0, 0.1])
 
 
 class MockCostResult:
@@ -64,9 +56,7 @@ def mock_optimization():
 def mock_optimization_highorder():
     """High-order mock optimization object"""
     return MockControlOptimization(
-        num1=[1.0, 0.5], den1=[1.0, 0.5, 0.1],
-        num2=[1.0, 0.3], den2=[1.0, 0.6, 0.2],
-        num3=[1.0, 0.2], den3=[1.0, 0.4, 0.3]
+        plant_num=[1.0, 0.5], plant_den=[1.0, 0.5, 0.1]
     )
 
 

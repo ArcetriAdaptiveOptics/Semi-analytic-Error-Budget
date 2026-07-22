@@ -62,7 +62,6 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
     plant_den_base = np.asarray(param['plant']['denominator'])
     plant_den = np.polymul(plant_den_base, funct_d2(total_delay)) 
     plant_tf = ct.tf(plant_num, plant_den, t_0)
-
     
     modulation_radius = param['wavefront_sensor']['modulation_radius']
     maximum_radial_order = radial_order_from_n_modes(n_actuators)
@@ -215,6 +214,7 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
         'plant_num': plant_num,
         'plant_den': plant_den,
         'controller_type': controller_type,
+        'wavelength_nm': wavelength_nm
     }
     
     merged_dict = {**main_dict, **control_dirt}
@@ -250,6 +250,7 @@ def init_optimization_context(init_params, mode_index):
         # static_fit_variance=init_params.static_fit_variance,
         plant_num=init_params.plant_num,
         plant_den=init_params.plant_den,
+        wavelength_nm=init_params.wavelength_nm
     )
     return obj_to_optimize
 
