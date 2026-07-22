@@ -3,7 +3,7 @@ telescope:
 atmosphere:
   outer_scale: 25
   wind_speed: 8
-  seeing: 0.7708140015602112
+  seeing: 0.9045820236206055
 wavefront_sensor:
   value_for_F_excess_noise: 2
   sky_backgr: 0
@@ -16,7 +16,7 @@ wavefront_sensor:
   - 3.0
 guide_star:
   flux_photons: 6e9
-  magn: 11.686797142028809
+  magn: 13.992380142211914
 data:
   reconstruction_matrix: ''
   windshake_psd: src/file_fits/LBT/LBTelabVibrations_2019.fits
@@ -73,7 +73,7 @@ frequency_ranges:
   temporal_freqs_n: 1000
 control:
   n_modes: 0
-  sampling_time: 0.0010070493454179255
+  sampling_time: 0.001277139208173691
   slope_computer_weights:
   - 1
   - 1
@@ -84,7 +84,7 @@ control:
   gain_block_sizes:
   - 2
   - null
-  bin: 1
+  bin: 2
 display:
   enabled: true
   summary_modes_to_plot: null
