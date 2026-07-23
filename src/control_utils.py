@@ -220,7 +220,7 @@ def compute_close_loop_peak_penalty(
         H_cl_ss = ss(H_cl_tf)    # transfer function to state-space
     except:
         issues.append("Cannot convert to state-space form")
-        return issues
+        return 1e9              # Return a large penalty if conversion fails
     
     # check feedthrough
     if hasattr(H_cl_ss, 'D'):
