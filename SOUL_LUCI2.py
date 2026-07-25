@@ -21,7 +21,7 @@ pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
 
-analysis_mode = "single"
+analysis_mode = "all"
 
 # =============================================================================
 # FUNCTIONS
@@ -60,8 +60,10 @@ def decode_bytes_array(array):
     return result
 
 
-#  Loads the base YAML file, updates the parameters, runs SAEB, returns 
+#  Loads the base YAML file, updates the parameters, runs SAEB, computes the
+#  Strehl ratio and its difference from the measured LUCI value. Returns 
 #  the output dictionary.
+
 
 def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
    
@@ -72,7 +74,6 @@ def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
     sampling_time = 1.0 / float(ao_framerate)
     param["control"]["sampling_time"] = sampling_time
 
-    # delay
     if sampling_time >= 0.00167:
         param["plant"]["total_delay"] = 1
     else:
@@ -82,12 +83,28 @@ def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
     with open("params_Total_variance_SOUL_LUCI2_modified.yaml", "w") as file:
         yaml.dump(param, file, sort_keys=False)
 
-    # run SAEB
     result = run("params_Total_variance_SOUL_LUCI2_modified.yaml")
 
     # create output dictionary
     output = dict(output_info)
     output.update(result)
+    
+    # Compute Strehl Ratio
+    
+    variance_tot = output["var_total"]
+    Lambda_Luci = output["LAMBDA_LUCI"]
+    
+    if Lambda_Luci != -1:
+        output["SR_SAEB"] = np.exp(-variance_tot * (2*np.pi/Lambda_Luci)**2)
+    else:
+         output["SR_SAEB"] = np.nan
+    
+    # Difference with measured Strehl
+    
+    if output["SR_LUCI"] != -1 and not np.isnan(output["SR_SAEB"]):
+        output["SR_DIFF"] = output["SR_SAEB"] - output["SR_LUCI"]
+    else:
+        output["SR_DIFF"] = np.nan 
 
     return output
 
@@ -110,8 +127,9 @@ df = pd.DataFrame({
     "AO_FRAMERATE": to_native_endian(table["AO_FRAMERATE"][0]),
     "BINNING": to_native_endian(table["BINNING"][0]),
     "DIMM": to_native_endian(table["DIMM"][0]),
-})
-
+    "LAMBDA_LUCI": to_native_endian(table["LAMBDA_LUCI"][0]),
+    "SR_LUCI": to_native_endian(table["SR_LUCI"][0])
+    })
 
 print("\nFirst rows of the DataFrame:")
 print(df.head())
@@ -146,8 +164,10 @@ if analysis_mode == "single":
         "AO_FRAMERATE": row["AO_FRAMERATE"],
         "BINNING": row["BINNING"],
         "DIMM": row["DIMM"],
+        "LAMBDA_LUCI": row["LAMBDA_LUCI"],
+        "SR_LUCI": row["SR_LUCI"]
     }
-    
+        
     output = run_saeb(seeing=row["DIMM"], magnitude=row["WFS_MAG"], binning=row["BINNING"],
                       ao_framerate=row["AO_FRAMERATE"], output_info=output_info)
     
@@ -220,12 +240,31 @@ elif analysis_mode == "all":
     
         dimm_median = group_df["DIMM"].median()
         wfs_mag_median = group_df["WFS_MAG"].median()
-    
+        
+        # Valid wavelength values
+        valid_lambda = group_df[group_df["LAMBDA_LUCI"] != -1]
+        
+        if len(valid_lambda) > 0:
+            lambda_luci = valid_lambda["LAMBDA_LUCI"].iloc[0]
+        else:
+            lambda_luci = -1
+     
+        # Valid SR values
+        valid_sr = group_df[group_df["SR_LUCI"] != -1]
+
+        if len(valid_sr) > 0:
+            sr_luci = valid_sr["SR_LUCI"].median()
+        else:
+            sr_luci = -1
+
         print("STAR_ID:", star_id)
         print("BINNING:", binning)
         print("AO_FRAMERATE:", ao_framerate)
         print("DIMM median:", dimm_median)
         print("WFS_MAG median:", wfs_mag_median)
+        print("LAMBDA_LUCI:", lambda_luci)
+        print("SR_LUCI:", sr_luci)
+
     
         output_info = {
             "STAR_ID": star_id,
@@ -233,7 +272,9 @@ elif analysis_mode == "all":
             "AO_FRAMERATE": ao_framerate,
             "DIMM_MEDIAN": dimm_median,
             "WFS_MAG_MEDIAN": wfs_mag_median,
-        }
+            "LAMBDA_LUCI":lambda_luci,
+            "SR_LUCI": sr_luci      
+         }
     
         output = run_saeb(seeing=dimm_median, magnitude=wfs_mag_median, binning=binning, 
                           ao_framerate=ao_framerate, output_info=output_info)
@@ -265,6 +306,11 @@ elif analysis_mode == "all":
 
 
 
+    
+    
+    
+    
+    
     
     
     
