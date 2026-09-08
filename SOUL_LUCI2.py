@@ -83,7 +83,7 @@ def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
     with open("params_Total_variance_SOUL_LUCI2_modified.yaml", "w") as file:
         yaml.dump(param, file, sort_keys=False)
 
-    result = run("params_Total_variance_SOUL_LUCI2_modified.yaml")
+    result = run("params_Total_variance_SOUL_LUCI2_modified.yaml", return_std=True)
 
     # create output dictionary
     output = dict(output_info)
