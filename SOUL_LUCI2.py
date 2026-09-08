@@ -21,7 +21,6 @@ pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
 
-analysis_mode = "all"
 
 # =============================================================================
 # FUNCTIONS
@@ -91,7 +90,10 @@ def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
     
     # Compute Strehl Ratio
     
-    variance_tot = output["var_total"]
+    if "var_total" in output:
+        variance_tot = output["var_total"]
+    else:
+        variance_tot = output["std_total"]**2
     Lambda_Luci = output["LAMBDA_LUCI"]
     
     if Lambda_Luci != -1:
