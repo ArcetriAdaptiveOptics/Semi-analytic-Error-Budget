@@ -131,9 +131,9 @@ control:
 
 display:
   # Enable/disable all visualization blocks
-  enabled: true
+  enabled: false
   # Modes shown in summary plots (null => automatic selection)
   summary_modes_to_plot: null
   # Enable legacy plots/checks in addition to the new summary display
-  show_legacy_plots: true
+  show_legacy_plots: false
 

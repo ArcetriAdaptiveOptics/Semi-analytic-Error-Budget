@@ -86,6 +86,6 @@ control:
   - null
   bin: 2
 display:
-  enabled: true
+  enabled: false
   summary_modes_to_plot: null
-  show_legacy_plots: true
+  show_legacy_plots: false
