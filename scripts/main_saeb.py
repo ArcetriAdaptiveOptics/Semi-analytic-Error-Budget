@@ -137,7 +137,7 @@ def run(yaml_file, return_std=False):
     readout_noise = param['wavefront_sensor']['noise_readout']
 
     file_path_R1 = param['data']['reconstruction_matrix']
-    file_path_wind1 = param['data']['windshake_psd']
+    file_path_wind1 = param['data'].get('windshake_psd', None)
     file_optg = param['data'].get('optical_gain_models', None)
     file_sigma_slope = param['data']['sigma_slopes']
     file_optg_cube = param['data'].get('optical_gain_cube', None)
@@ -182,7 +182,10 @@ def run(yaml_file, return_std=False):
 
     gain_sweeps = None
 
-    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1, target_frequencies=temporal_freqs)
+    if file_path_wind1 is not None and file_path_wind1 != "":
+        freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1, target_frequencies=temporal_freqs)
+    else:
+        freq, PSD_wind_vib = temporal_freqs, np.zeros((2, temporal_freqs.shape[0]))  # No windshake PSD provided, use zeros
 
     if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):
         raise RuntimeError("PSD windshake or corresponding frequencies not loaded")
