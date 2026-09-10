@@ -12,7 +12,7 @@ atmosphere:
 
 wavefront_sensor:
   # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
-  value_for_F_excess_noise: 2
+  value_for_F_excess_noise: 1.414
   # Sky background in [photo-electrons]
   sky_backgr: 0
   # Dark current in [photo-electrons]
@@ -131,9 +131,9 @@ control:
 
 display:
   # Enable/disable all visualization blocks
-  enabled: true
+  enabled: false
   # Modes shown in summary plots (null => automatic selection)
   summary_modes_to_plot: null
   # Enable legacy plots/checks in addition to the new summary display
-  show_legacy_plots: true
+  show_legacy_plots: false
 

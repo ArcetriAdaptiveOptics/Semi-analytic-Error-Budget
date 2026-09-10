@@ -21,6 +21,62 @@ def _load_main_saeb_module():
 
 class TestMainSaebBlockOptimization(unittest.TestCase):
 
+    def test_run_can_return_standard_deviation_dict(self):
+        main_saeb = _load_main_saeb_module()
+
+        fake_param = {
+            "control": {
+                "n_modes": 4,
+                "sampling_time": 0.01,
+                "gain_mode": "fixed",
+                "gain_min": 0.1,
+                "gain_n": 1,
+                "slope_computer_weights": [1, 0, 0, 0],
+                "bin": 1,
+            },
+            "telescope": {"telescope_diam": 8.0},
+            "atmosphere": {"outer_scale": 25.0, "wind_speed": 8.0, "seeing": 0.8},
+            "wavefront_sensor": {
+                "value_for_F_excess_noise": 2.0,
+                "sky_backgr": 0.0,
+                "dark_curr": 0.0,
+                "noise_readout": 0.0,
+                "number_of_sub": 10,
+                "modulation_radius": 3.0,
+            },
+            "guide_star": {"flux_photons": 1.0, "magn": 0.0},
+            "data": {
+                "reconstruction_matrix": "dummy.fits",
+                "windshake_psd": "dummy_wind.fits",
+                "sigma_slopes": "dummy_sigma.fits",
+                "optical_gain_models": ["og0.fits", "og4.fits"],
+            },
+            "plant": {"numerator": [1.0], "denominator": [1.0], "total_delay": 3},
+            "frequency_ranges": {"temporal_freqs_min": -3, "temporal_freqs_n": 4},
+            "display": {"enabled": False, "summary_modes_to_plot": None},
+        }
+
+        with patch.object(main_saeb, "load_parameters", return_value=fake_param), \
+             patch.object(main_saeb, "resolve_binning_config", side_effect=lambda param: param), \
+             patch.object(main_saeb, "load_PSD_windshake", return_value=(np.array([1.0, 2.0, 4.0, 8.0]), np.ones((4, 4)))), \
+             patch.object(main_saeb, "compute_optical_gain", return_value=np.ones(4)), \
+             patch.object(main_saeb, "funct_d2", return_value=np.array([1.0])), \
+             patch.object(main_saeb, "turbulence_psd", return_value=np.ones((4, 4))), \
+             patch.object(main_saeb, "build_transfer_function", return_value=(np.ones((4, 4)), np.ones((4, 4)))), \
+             patch.object(main_saeb, "fitting_variance", return_value=9.0), \
+             patch.object(main_saeb, "temporal_variance", return_value=(1.0, 4.0, np.ones((4, 4)), np.ones((4, 4)))), \
+             patch.object(main_saeb, "vibration_variance", return_value=(1.0, 1.0, np.ones((4, 4)), np.ones((4, 4)))), \
+             patch.object(main_saeb, "aliasing_variance", return_value=(1.0, 1.0, np.ones((4, 4)), np.ones((4, 4)))), \
+             patch.object(main_saeb, "measure_variance", return_value=(1.0, 1.0, np.ones((4, 4)), np.ones((4, 4)))), \
+             patch.object(main_saeb, "total_variance", return_value=25.0):
+            result = main_saeb.run("params_ANDES.yaml", return_std=True)
+
+        self.assertIn("std_fit", result)
+        self.assertIn("std_total", result)
+        self.assertNotIn("var_fit", result)
+        self.assertAlmostEqual(result["std_fit"], 3.0)
+        self.assertAlmostEqual(result["std_total"], 4.0)
+
     def test_run_loads_psd_before_block_optimization(self):
         main_saeb = _load_main_saeb_module()
 

@@ -104,7 +104,7 @@ def _build_gain_vector(loop_params, n_actuators):
     raise ValueError("Set gain_n: 1 with gain_min, or provide gain_value/gain_vector")
 
 
-def run(yaml_file):
+def run(yaml_file, return_std=False):
     yaml_path = _resolve_yaml_path(yaml_file)
     param = load_parameters(str(yaml_path))
 
@@ -137,7 +137,7 @@ def run(yaml_file):
     readout_noise = param['wavefront_sensor']['noise_readout']
 
     file_path_R1 = param['data']['reconstruction_matrix']
-    file_path_wind1 = param['data']['windshake_psd']
+    file_path_wind1 = param['data'].get('windshake_psd', None)
     file_optg = param['data'].get('optical_gain_models', None)
     file_sigma_slope = param['data']['sigma_slopes']
     file_optg_cube = param['data'].get('optical_gain_cube', None)
@@ -182,7 +182,10 @@ def run(yaml_file):
 
     gain_sweeps = None
 
-    freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1, target_frequencies=temporal_freqs)
+    if file_path_wind1 is not None and file_path_wind1 != "":
+        freq, PSD_wind_vib = load_PSD_windshake(file_path_wind1, target_frequencies=temporal_freqs)
+    else:
+        freq, PSD_wind_vib = temporal_freqs, np.zeros((2, temporal_freqs.shape[0]))  # No windshake PSD provided, use zeros
 
     if (freq is None and PSD_wind_vib is None) or (freq is None or PSD_wind_vib is None):
         raise RuntimeError("PSD windshake or corresponding frequencies not loaded")
@@ -324,17 +327,30 @@ def run(yaml_file):
 
     sr_estimation = np.exp(-(np.sqrt(np.real(var_tot))*2*np.pi/wavelength_nm)**2)
     
-    result = {
-        'var_fit':   float(np.real(var_fit)),
-        'var_temp':  float(np.real(var_temp_atmo_CL)),
-        'var_vibr':  float(np.real(var_vibr_CL)),
-        'var_alias': float(np.real(var_alias_CL)),
-        'var_meas':  float(np.real(var_meas_CL)),
-        'var_total': float(np.real(
-            var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
-        )),
-        'sr_estimation': float(np.real(sr_estimation)),
-    }
+    if return_std:
+        result = {
+            'std_fit':   float(np.sqrt(np.real(var_fit))),
+            'std_temp':  float(np.sqrt(np.real(var_temp_atmo_CL))),
+            'std_vibr':  float(np.sqrt(np.real(var_vibr_CL))),
+            'std_alias': float(np.sqrt(np.real(var_alias_CL))),
+            'std_meas':  float(np.sqrt(np.real(var_meas_CL))),
+            'std_total': float(np.sqrt(np.real(
+                var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
+            ))),
+            'sr_estimation': float(np.real(sr_estimation)),
+        }
+    else:
+        result = {
+            'var_fit':   float(np.real(var_fit)),
+            'var_temp':  float(np.real(var_temp_atmo_CL)),
+            'var_vibr':  float(np.real(var_vibr_CL)),
+            'var_alias': float(np.real(var_alias_CL)),
+            'var_meas':  float(np.real(var_meas_CL)),
+            'var_total': float(np.real(
+                var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
+            )),
+            'sr_estimation': float(np.real(sr_estimation)),
+        }
 
     if not display:
         return result
@@ -368,14 +384,19 @@ def main():
         nargs="+",
         help="Use either: <yaml_file> or run <yaml_file>"
     )
+    parser.add_argument(
+        "--return-std",
+        action="store_true",
+        help="Return standard deviations in the result dictionary instead of variances."
+    )
     args = parser.parse_args()
 
     if len(args.args) == 1:
-        run(args.args[0])
+        run(args.args[0], return_std=args.return_std)
         return
 
     if len(args.args) == 2 and args.args[0] == "run":
-        run(args.args[1])
+        run(args.args[1], return_std=args.return_std)
         return
 
     parser.error("Usage: python scripts/main_sa.py <yaml_file> or"
