@@ -1,0 +1,163 @@
+telescope:
+  # Primary mirror diameter in [m]
+  telescope_diam: 38.5
+
+atmosphere:
+  # Outer scale in [m]
+  outer_scale: 25
+  # Wind speed in [m/s]
+  wind_speed: 8
+  # Seeing in [arcsec]
+  seeing: 0.8
+
+# ---------------------------------------------------------------------------
+# Pyramid WFS, higher-order (HO) loop.
+#
+# In this hybrid configuration the pyramid only corrects HO modes: modes 0
+# and 1 (tip and tilt) are handled by the full-aperture sensor (FACS,
+# 'wavefront_sensor_facs' / 'control_facs' below) instead. The pyramid's own
+# reconstruction matrix, aliasing and optical-gain data below are unchanged
+# from params_ANDES.yaml (they are computed for the full 4000-mode system;
+# Total_Variance_FACS.py discards their tip/tilt (modes 0-1) contribution
+# and keeps modes 2.. for the HO budget). control.n_modes is used as N_HO+2
+# for the pyramid loop's own transfer functions, and as N_HO (n_modes - 2)
+# for the fitting-error formula.
+# ---------------------------------------------------------------------------
+wavefront_sensor:
+  # Square root gives the excess noise factor (F = sqrt(value_for_F_excess_noise))
+  value_for_F_excess_noise: 1.414
+  # Sky background in [photo-electrons]
+  sky_backgr: 0
+  # Dark current in [photo-electrons]
+  dark_curr: 0
+  # Readout noise in [photo-electrons]
+  noise_readout: 0.2
+  # Number of sub apertures on the diameter of the telescope
+  number_of_sub: 100
+  # Modulation radius [lambda/D]
+  modulation_radius: 3
+  # Modal radius for optg grid
+  modal_radius_andes: [0.0, 4.0]
+
+guide_star:
+  # Number of photons per second per m^2 including total throughput
+  flux_photons: 8e9
+  # Guide star magnitude
+  magn: 7.5
+
+# Only read when wavefront_sensor_facs.flux_mode is 'independent' (FACS
+# senses a different band than the pyramid, via a dichroic): its own
+# photometry, same convention as 'guide_star' above but at
+# wavefront_sensor_facs.wavelength.
+# guide_star_facs:
+#   flux_photons: 8e9
+#   magn: 7.5
+
+data:
+  # Path to reconstruction matrix or noise propagation coefficients vector
+  reconstruction_matrix: "src/file_fits/ANDES/ANDES_pyr100x100_wl850_fv2.1_slInten_ma3_bn1_mn4000_noise_prop_coeff.fits"
+  # Path to wind-shake PSD (tip and tilt)
+  windshake_psd: "src/file_fits/ANDES/morfeo_windshake8ms_psd_2022_1k.fits"
+  # Path to ANDES modulation models (mod0 and mod4)
+  optical_gain_models: ["src/file_fits/ANDES/ANDES_og_mod0.fits", "src/file_fits/ANDES/ANDES_og_mod4.fits"]
+  # Path to sigma slopes from aliasing
+  sigma_slopes: "src/file_fits/ANDES/slopes_std_time_avg_all.fits"
+  # Path to modal PSD_aliasing from specula
+  modal_psd_alias: "src/file_fits/ANDES/modal_psd_aliasing.fits"
+
+plant:
+  # Numerator polynomial coefficients of the plant transfer function
+  numerator: [1]
+  # Denominator polynomial coefficients of the plant transfer function
+  denominator: [1]
+  # Total delay (WFS + RTC + DM) in [frames]
+  total_delay: 3
+
+frequency_ranges:
+  # Minimum exponent for temporal frequency logspace (Hz); max is Nyquist = 1/(2*sampling_time)
+  temporal_freqs_min: -2
+  temporal_freqs_n: 1000
+  # Note: maximum is retrieved from sampling_time
+
+control:
+  # Total modes for the pyramid's own transfer functions (includes the 2
+  # tip/tilt modes at indices 0-1, which are discarded downstream in favor
+  # of the FACS branch below). N_HO = n_modes - 2.
+  n_modes: 4000
+  # Sampling time in [s] — also sets the Nyquist frequency
+  sampling_time: 0.002
+  # Weights on the 4 pyramid pixels used by the slope computer.
+  # Use [1, 1, 1, 1] for classical slopes or [1, 0, 0, 0] for intensity-based slopes.
+  slope_computer_weights: [1, 0, 0, 0]
+  # Gain policy: block_optimization means one optimized gain per block.
+  gain_mode: block_optimization
+  gain_min: 0.01
+  # Optional block-wise gain optimization. Each value is the number of modes
+  # optimized together with one shared gain. The first block (2 modes) is
+  # the pyramid's own tip/tilt gain, computed for completeness but unused:
+  # tip/tilt is corrected using the FACS loop (control_facs.gain_value).
+  gain_block_sizes: [2, 98, 900, 1000, 1000, 1000]
+  # Binning
+  bin: 1
+
+# ---------------------------------------------------------------------------
+# Full-Aperture Centroid Sensor (FACS): tip/tilt loop.
+#
+# FACS is modeled as a single-subaperture (1x1) Shack-Hartmann-like sensor
+# using a weighted center-of-gravity (WCoG) on the whole-pupil PSF. Unlike
+# the pyramid, it is linear (no optical-gain loss) and has no classical
+# spatial-aliasing term (neglected here, see src/facs_functions.py).
+# ---------------------------------------------------------------------------
+wavefront_sensor_facs:
+  # Excess noise, background, dark current, read-out noise: same convention
+  # as 'wavefront_sensor' above (F^2 multiplies photon+bg+dark shot noise).
+  value_for_F_excess_noise: 1.0
+  sky_backgr: 0
+  dark_curr: 0
+  noise_readout: 0.5
+  # Sensing wavelength [nm] (converted to meters in Total_Variance_FACS.py)
+  wavelength: 800
+  # Photon source, mutually exclusive:
+  #  - 'shared': FACS and the pyramid sense the SAME light (a plain
+  #    beamsplitter, not a dichroic): FACS gets a fraction 'flux_split' of
+  #    guide_star.flux_photons, the pyramid keeps the rest (1-flux_split).
+  #  - 'independent': FACS senses a different wavelength band (a dichroic),
+  #    with its own photometry given in 'guide_star_facs' below; the
+  #    pyramid keeps its full guide_star.flux_photons.
+  flux_mode: shared
+  # Fraction of guide_star.flux_photons sent to FACS (only used if
+  # flux_mode: shared). FACS is extremely photon-rich (whole-pupil
+  # centroid), so a small fraction is normally enough.
+  flux_split: 0.1
+  # Pixel window around the spot used for the WCoG (n_pixels x n_pixels)
+  n_pixels: 16
+  # Detector sampling, in pixels per lambda/D (2 = Nyquist -> 0.5 lambda/D/pixel)
+  n_samp: 2
+  # Diffraction-limited spot FWHM in pixels (~0.886 * n_samp for a sinc^2 spot)
+  fwhm_spot_pix: 1.772
+  # WCoG Gaussian weighting-function FWHM in pixels
+  fwhm_weight_pix: 2.0
+  # Pixel scale in [arcsec/pixel] = 0.5*(wavelength/telescope_diam)*206264.8
+  # for n_samp=2 and the telescope/wavelength above.
+  pixel_scale_arcsec: 2.1431e-3
+  # meanVarPixelThr threshold / iteration controls (see MASTSEL docs)
+  threshold: -.inf
+  order: 30
+  npoints: 1000
+
+control_facs:
+  # Fixed closed-loop gain for the tip/tilt loop driven by FACS (not
+  # auto-optimized in this first iteration; see Total_Variance_FACS.py).
+  gain_value: 0.3
+  # Optional: sampling time override for the FACS detector/RTC chain;
+  # defaults to control.sampling_time if absent (i.e. same timing as the
+  # pyramid loop is assumed unless overridden here).
+  # sampling_time: 0.002
+
+display:
+  # Enable/disable all visualization blocks
+  enabled: true
+  # Modes shown in summary plots (null => automatic selection)
+  summary_modes_to_plot: null
+  # Enable legacy plots/checks in addition to the new summary display
+  show_legacy_plots: true
