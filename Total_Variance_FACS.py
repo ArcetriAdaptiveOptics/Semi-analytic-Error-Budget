@@ -107,8 +107,7 @@ print("PSD windshake and corresponding frequencies loaded successfully.")
 # discarded in favor of the FACS branch below.
 # =============================================================================
 
-value_F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
-F_excess_noise = np.sqrt(value_F_excess_noise)
+F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
 sky_background = param['wavefront_sensor']['sky_backgr']
 dark_current = param['wavefront_sensor']['dark_curr']
 readout_noise = param['wavefront_sensor']['noise_readout']
