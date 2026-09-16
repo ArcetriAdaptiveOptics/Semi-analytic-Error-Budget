@@ -46,7 +46,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
     plant_num = np.asarray(plant['numerator'])
     plant_den_base = np.asarray(plant['denominator'])
 
-    F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
+    F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
     sky_background = param['wavefront_sensor']['sky_backgr']
     dark_current = param['wavefront_sensor']['dark_curr']
     readout_noise = param['wavefront_sensor']['noise_readout']
