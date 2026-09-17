@@ -325,6 +325,25 @@ def run(yaml_file, return_std=False):
     var_tot = total_variance(var_fit, var_temp_atmo_CL + var_vibr_CL, var_alias_CL, var_meas_CL)
 
     sr_estimation = np.exp(-(np.sqrt(np.real(var_tot))*2*np.pi/wavelength_nm)**2)
+
+    # Tip-tilt residual from error budget: sum modal variances for modes 0 and 1.
+    var_temp_modes = integrate_modal_psd(PSD_out_temp_atmo, omega_temporal_freqs)
+    var_vibr_modes = integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
+    var_alias_modes = integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
+    var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
+
+    n_tt_modes = min(2, var_temp_modes.size, var_vibr_modes.size, var_alias_modes.size, var_meas_modes.size)
+    if n_tt_modes > 0:
+        var_tt = float(np.real(
+            np.sum(var_temp_modes[:n_tt_modes])
+            + np.sum(var_vibr_modes[:n_tt_modes])
+            + np.sum(var_alias_modes[:n_tt_modes])
+            + np.sum(var_meas_modes[:n_tt_modes])
+        ))
+    else:
+        var_tt = float('nan')
+
+    std_tt = float(np.sqrt(var_tt)) if np.isfinite(var_tt) and var_tt >= 0 else float('nan')
     
     if return_std:
         result = {
@@ -333,6 +352,7 @@ def run(yaml_file, return_std=False):
             'std_vibr':  float(np.sqrt(np.real(var_vibr_CL))),
             'std_alias': float(np.sqrt(np.real(var_alias_CL))),
             'std_meas':  float(np.sqrt(np.real(var_meas_CL))),
+            'std_tt':    std_tt,
             'std_total': float(np.sqrt(np.real(
                 var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
             ))),
@@ -345,6 +365,7 @@ def run(yaml_file, return_std=False):
             'var_vibr':  float(np.real(var_vibr_CL)),
             'var_alias': float(np.real(var_alias_CL)),
             'var_meas':  float(np.real(var_meas_CL)),
+            'var_tt':    var_tt,
             'var_total': float(np.real(
                 var_fit + var_temp_atmo_CL + var_vibr_CL + var_alias_CL + var_meas_CL
             )),
@@ -354,10 +375,6 @@ def run(yaml_file, return_std=False):
     if not display:
         return result
 
-    var_temp_modes = integrate_modal_psd(PSD_out_temp_atmo, omega_temporal_freqs)
-    var_vibr_modes = integrate_modal_psd(PSD_out_vibr, omega_temporal_freqs)
-    var_alias_modes = integrate_modal_psd(PSD_out_alias, omega_temporal_freqs)
-    var_meas_modes = integrate_modal_psd(PSD_out_meas, omega_temporal_freqs)
     n_modes_display = var_temp_modes.size
     var_fit_modes = np.full(n_modes_display, np.real(var_fit) / n_modes_display)
     

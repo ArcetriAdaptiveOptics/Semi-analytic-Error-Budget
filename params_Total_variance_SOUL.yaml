@@ -36,7 +36,7 @@ data:
   # Path to reconstruction matrix or noise propagation coefficients vector
   reconstruction_matrix: "" # NOTE: defined in binning_configs
   # Path to wind-shake PSD (tip and tilt)
-  windshake_psd: "src/file_fits/LBT/LBTelabVibrations_2019.fits"
+  windshake_psd: "" # "src/file_fits/LBT/LBTelabVibrations_2019.fits"
   # Path to sigma slopes from aliasing
   sigma_slopes: "" # NOTE: defined in binning_configs
   # Path to SOUL optical gain cube
