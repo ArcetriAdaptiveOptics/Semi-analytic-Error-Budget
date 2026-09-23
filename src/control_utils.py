@@ -65,6 +65,8 @@ def control_CL_tf_margin(
     # gm - gain margin, pm - phase margin, sm - stability margin, wpc - phase crossover frequency,
     # wgc - gain crossover frequency, wms - stability margin crossover frequency
     H_ol_gm, H_ol_pm, H_ol_sm, _, _, _ = ct.stability_margins(H_ol_tf, returnall=False)
+    # transform gain margin to dB
+    H_ol_gm = 20 * np.log10(H_ol_gm) if np.isfinite(H_ol_gm) and H_ol_gm > 0 else float('inf')
         
     # Check stability (boolean)
     H_n_is_stable = all(np.abs(H_n_tf.poles()) < 1)
@@ -124,8 +126,8 @@ def cost(obj_to_optimize,
     H_r_tf = result_control_CL_tf["H_r_tf"]
     H_ol_tf = result_control_CL_tf["H_ol_tf"]
     
-    H_n_peak_limitation = 3 # dB
-    H_r_peak_limitation = 6 # dB    
+    H_n_peak_limitation = 2 # dB
+    H_r_peak_limitation = 3 # dB    
     
     ctrl_num_evaluate = ctrl_tf.num[0][0]
     ctrl_den_evaluate = ctrl_tf.den[0][0]
@@ -138,13 +140,14 @@ def cost(obj_to_optimize,
     # cost function without fitting error, which is static
     cost_variance_without_fitting = evaluate_result.cost
     
-    H_n_tf_peak_penalty = compute_close_loop_peak_penalty(H_n_tf, H_n_peak_limitation) 
-    H_r_tf_peak_penalty = compute_close_loop_peak_penalty(H_r_tf, H_r_peak_limitation)    
-    
     if not all(CL_stability):
-        stability_penalty = 1e9  # A large penalty for instability
+        stability_penalty = 1e9
+        H_n_tf_peak_penalty = 1e9
+        H_r_tf_peak_penalty = 1e9
     else:
         stability_penalty = 0
+        H_n_tf_peak_penalty = compute_close_loop_peak_penalty(H_n_tf, H_n_peak_limitation)
+        H_r_tf_peak_penalty = compute_close_loop_peak_penalty(H_r_tf, H_r_peak_limitation)
     
     if sm_target is None:
         sm_target = 0.5 # Target stability margin (example value)
@@ -169,7 +172,7 @@ def cost(obj_to_optimize,
     
     if weight_cost is None:
         weight_cost = np.array([1, 1, 1e1, 1e2, 1e4, 1e3], dtype=float)
-        
+            
     cost_function = (cost_variance_without_fitting * weight_cost[0] 
                     + stability_penalty * weight_cost[1]
                     + sm_penalty * weight_cost[2]
@@ -222,30 +225,23 @@ def compute_close_loop_peak_penalty(
         issues.append("Cannot convert to state-space form")
         return 1e9              # Return a large penalty if conversion fails
     
-    # check feedthrough
-    if hasattr(H_cl_ss, 'D'):
-        if not np.allclose(H_cl_ss.D, 0):
-            issues.append("System has non-zero feedthrough (D ≠ 0)")
-    
     # check if system is stable
-    if hasattr(H_cl_ss, 'A'):
+    if hasattr(H_cl_ss, 'A') and H_cl_ss.A.size > 0:
         eigvals = np.linalg.eigvals(H_cl_ss.A)
-        if np.max(np.real(eigvals)) >= 0:
+        if H_cl_tf.dt is not None and H_cl_tf.dt > 0:
+            # dicrete system: |eigvals| < 1 for stability
+            is_stable = np.all(np.abs(eigvals) < 1)
+        else:
+            # continuous system: Re(eigvals) < 0 for stability
+            is_stable = np.all(np.real(eigvals) < 0)
+        if not is_stable:
             issues.append("System is not stable")
+            return 1e9
     
     # check if system is proper
     if hasattr(H_cl_ss, 'D'):
         if H_cl_ss.D.shape[0] != H_cl_ss.D.shape[1]:
             issues.append(f"Non-square D matrix: {H_cl_ss.D.shape}")
-    
-     # check numerical conditioning
-    if hasattr(H_cl_ss, 'D') and H_cl_ss.D.size > 0:
-        try:
-            cond_num = np.linalg.cond(H_cl_ss.D)
-            if cond_num > 1e10:
-                issues.append(f"Poorly conditioned D matrix: cond={cond_num}")
-        except Exception as e:
-            issues.append(f"Cannot compute condition number: {str(e)}")
     
     if issues:
         print("\n=== Issues found with closed-loop system ===")
