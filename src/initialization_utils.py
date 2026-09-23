@@ -13,6 +13,7 @@ from src.Functions import (
     compute_optical_gain,
     fitting_variance,
     DEFAULT_ALIASING_ALPHA)
+from src.config_utils import resolve_binning_config
 
 from src.controller_optimization import prepare_single_mode_control_optimization
 
@@ -23,6 +24,11 @@ DEFAULT_FITTING_COEFF = 0.28
 def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
     
     param = load_parameters(param_dir)
+    
+    if param is None:
+            raise RuntimeError("Parameters not loaded")
+    
+    param = resolve_binning_config(param)
     
     # load parameters from yaml file
     n_actuators = param['control']['n_modes']
