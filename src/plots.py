@@ -521,7 +521,7 @@ def plot_PSD_alias_mode_0 (actuators_number, omega_temp_freq_interval, alpha, te
                            magnitudo,reconstruction_matrix_path, c_optg, sigma_slopes_path,
                            modal_psd_aliasing_path=None):
 
-    if modal_psd_aliasing_path is None:
+    if not modal_psd_aliasing_path:
         return
     
     with fits.open(modal_psd_aliasing_path) as hdul:
