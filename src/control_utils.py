@@ -11,6 +11,7 @@ Utility functions for control system calculations
 import numpy as np
 import control as ct
 from control import ss
+from types import SimpleNamespace
 
 def control_CL_tf_margin(
     SingleModeControlOptimization,
@@ -65,6 +66,8 @@ def control_CL_tf_margin(
     # gm - gain margin, pm - phase margin, sm - stability margin, wpc - phase crossover frequency,
     # wgc - gain crossover frequency, wms - stability margin crossover frequency
     H_ol_gm, H_ol_pm, H_ol_sm, _, _, _ = ct.stability_margins(H_ol_tf, returnall=False)
+    # transform gain margin to dB
+    H_ol_gm = 20 * np.log10(H_ol_gm) if np.isfinite(H_ol_gm) and H_ol_gm > 0 else float('inf')  #dB
         
     # Check stability (boolean)
     H_n_is_stable = all(np.abs(H_n_tf.poles()) < 1)
@@ -104,6 +107,30 @@ def cost(obj_to_optimize,
          verbose=False,
          **controller_param):
     
+    """
+    Compute the cost function for the given controller parameters.
+    Parameters:
+    - obj_to_optimize: An instance of SingleModeControlOptimization.
+    - sm_target: Target stability margin which is the minimum distance from the Nyquist plot to -1
+    (optional, between 0 and 1).
+    - gm_target: Target gain margin (optional, in dB).
+    - weight_cost: Weights for different components of the cost function (optional).
+    - verbose: If True, print detailed information about the cost function (optional).
+    - controller_param: Additional parameters for the controller (e.g., gain, controller_num, controller_den).
+    
+    Returns:
+    A dictionary containing:
+    - cost_function_value: The computed cost function value.
+    - evaluate_result: The result of evaluating the controller.
+    - penalty: List of penalties for stability, stability margin, H_n's peak, H_r's peak, and gain margin.
+    - weight_penalty: The weights used for the penalties
+    - H_n_tf: The closed-loop transfer function H_n.
+    - H_r_tf: The closed-loop transfer function H_r.
+    - H_ol_tf: The open-loop transfer function H_ol.
+    - H_ol_margins: List containing gain margin, phase margin, and stability margin.
+    - bandwidth_H_n: The bandwidth of the closed-loop transfer function H_n.
+    """
+    
     result_control_CL_tf = control_CL_tf_margin(
         obj_to_optimize,
         **controller_param)
@@ -124,34 +151,38 @@ def cost(obj_to_optimize,
     H_r_tf = result_control_CL_tf["H_r_tf"]
     H_ol_tf = result_control_CL_tf["H_ol_tf"]
     
-    H_n_peak_limitation = 3 # dB
-    H_r_peak_limitation = 6 # dB    
+    H_n_peak_limitation = 2 # dB
+    H_r_peak_limitation = 3 # dB    
     
     ctrl_num_evaluate = ctrl_tf.num[0][0]
     ctrl_den_evaluate = ctrl_tf.den[0][0]
-    
-    evaluate_result = obj_to_optimize.evaluate(
-        controller_num=ctrl_num_evaluate, 
-        controller_den=ctrl_den_evaluate, 
-        store_history=True)   
-    
-    # cost function without fitting error, which is static
-    cost_variance_without_fitting = evaluate_result.cost
-    
-    H_n_tf_peak_penalty = compute_close_loop_peak_penalty(H_n_tf, H_n_peak_limitation) 
-    H_r_tf_peak_penalty = compute_close_loop_peak_penalty(H_r_tf, H_r_peak_limitation)    
-    
+
+    # Only run expensive evaluation when the closed-loop is stable.
     if not all(CL_stability):
-        stability_penalty = 1e9  # A large penalty for instability
+        stability_penalty = 1e9
+        H_n_tf_peak_penalty = 1e9
+        H_r_tf_peak_penalty = 1e9
+        # Provide a lightweight placeholder so downstream code can access `.cost` safely
+        evaluate_result = SimpleNamespace(cost=1e9, history=None)
+        cost_variance_without_fitting = evaluate_result.cost
     else:
         stability_penalty = 0
+        H_n_tf_peak_penalty = compute_close_loop_peak_penalty(H_n_tf, H_n_peak_limitation)
+        H_r_tf_peak_penalty = compute_close_loop_peak_penalty(H_r_tf, H_r_peak_limitation)
+        evaluate_result = obj_to_optimize.evaluate(
+            controller_num=ctrl_num_evaluate,
+            controller_den=ctrl_den_evaluate,
+            store_history=True)
+        # cost function without fitting error, which is static
+        cost_variance_without_fitting = evaluate_result.cost
     
     if sm_target is None:
         sm_target = 0.5 # Target stability margin (example value)
     sm_penalty = np.maximum(0, sm_target - H_ol_sm) ** 2  # Penalty for not meeting stability margin target   
     
     if gm_target is None:
-        gm_target = 2.0
+        gm_target = 2.0   # dB
+        
     gm_penalty = np.maximum(0, gm_target - H_ol_gm)** 2   
     
     """
@@ -163,13 +194,16 @@ def cost(obj_to_optimize,
                     + gain margin * weight[5]
     where
     cost_variance_without_fitting = variance_vibr_CL + variance_alias_CL + variance_meas_CL;
-    penalty for stability = 0 if stable, else a large number;
-    margin to ensure stability = a large number * (max(0, target stability margin - actual stability margin));
+    penalty for stability = 0 if stable, else a large number like 1e9;
+    stablility margin = max(0, target stability margin - actual stability margin)^2 (dB^2);
+    penalty for H_n's peak = max(0, H_n's peak - target H_n's peak) ^ 2  (dB^2);
+    penalty for H_r's peak = max(0, H_r's peak - target H_r's peak) ^ 2 (dB^2);
+    gain margin = max(0, target gain margin - actual gain margin) ^ 2 (dB^2);
     """
     
     if weight_cost is None:
         weight_cost = np.array([1, 1, 1e1, 1e2, 1e4, 1e3], dtype=float)
-        
+            
     cost_function = (cost_variance_without_fitting * weight_cost[0] 
                     + stability_penalty * weight_cost[1]
                     + sm_penalty * weight_cost[2]
@@ -222,30 +256,10 @@ def compute_close_loop_peak_penalty(
         issues.append("Cannot convert to state-space form")
         return 1e9              # Return a large penalty if conversion fails
     
-    # check feedthrough
-    if hasattr(H_cl_ss, 'D'):
-        if not np.allclose(H_cl_ss.D, 0):
-            issues.append("System has non-zero feedthrough (D ≠ 0)")
-    
-    # check if system is stable
-    if hasattr(H_cl_ss, 'A'):
-        eigvals = np.linalg.eigvals(H_cl_ss.A)
-        if np.max(np.real(eigvals)) >= 0:
-            issues.append("System is not stable")
-    
     # check if system is proper
     if hasattr(H_cl_ss, 'D'):
         if H_cl_ss.D.shape[0] != H_cl_ss.D.shape[1]:
             issues.append(f"Non-square D matrix: {H_cl_ss.D.shape}")
-    
-     # check numerical conditioning
-    if hasattr(H_cl_ss, 'D') and H_cl_ss.D.size > 0:
-        try:
-            cond_num = np.linalg.cond(H_cl_ss.D)
-            if cond_num > 1e10:
-                issues.append(f"Poorly conditioned D matrix: cond={cond_num}")
-        except Exception as e:
-            issues.append(f"Cannot compute condition number: {str(e)}")
     
     if issues:
         print("\n=== Issues found with closed-loop system ===")
@@ -254,11 +268,12 @@ def compute_close_loop_peak_penalty(
         print("============================================\n")
                  
     H_cl_linf = ct.norm(H_cl_tf, p='inf')
-    close_loop_peak_target_times = 10 ** (close_loop_peak_target_dB/20)
+    # close_loop_peak_target_times = 10 ** (close_loop_peak_target_dB/20)
     
     if np.isinf(H_cl_linf):
         close_loop_peak_penalty = 1e9
     else:
-        close_loop_peak_penalty = max(0, H_cl_linf/close_loop_peak_target_times-1)
+        close_loop_peak_penalty = max(20 * np.log10(H_cl_linf) - close_loop_peak_target_dB, 0) ** 2
+        # close_loop_peak_penalty = max(0, H_cl_linf/close_loop_peak_target_times-1)
     
     return(close_loop_peak_penalty)
