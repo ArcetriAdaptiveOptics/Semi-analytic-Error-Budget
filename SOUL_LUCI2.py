@@ -23,6 +23,7 @@ pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
 analysis_mode = "all"
+use_ao_seeing = True
 TT_REFERENCE_WAVELENGTH_NM = 1650.0
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results" / "LBT"
@@ -267,6 +268,7 @@ df_columns = {
     "AO_FRAMERATE": to_native_endian(table["AO_FRAMERATE"][0]),
     "BINNING": to_native_endian(table["BINNING"][0]),
     "DIMM": to_native_endian(table["DIMM"][0]),
+    "AO_SEEING": to_native_endian(table["AO_SEEING"][0]),
     "LAMBDA_LUCI": to_native_endian(table["LAMBDA_LUCI"][0]),
     "SR_LUCI": to_native_endian(table["SR_LUCI"][0])
 }
@@ -278,6 +280,17 @@ if "SR_SLOPES_TTFREE" in table.dtype.names:
     df_columns["SR_SLOPES_TTFREE"] = to_native_endian(table["SR_SLOPES_TTFREE"][0])
 
 df = pd.DataFrame(df_columns)
+
+# print("\nAO_SEEING values:")
+# print(df["AO_SEEING"].describe())
+
+# print("\nNumber of AO_SEEING = -1:")
+# print((df["AO_SEEING"] == -1).sum())
+
+# print("\nAO_SEEING = -1:")
+# print(df[df["AO_SEEING"] == -1][["TN", "AO_SEEING"]])
+
+# print("Number of AO_SEEING = NaN:", df["AO_SEEING"].isna().sum())
 
 print("\nFirst rows of the DataFrame:")
 print(df.head())
@@ -312,6 +325,7 @@ if analysis_mode == "single":
         "AO_FRAMERATE": row["AO_FRAMERATE"],
         "BINNING": row["BINNING"],
         "DIMM": row["DIMM"],
+        "AO_SEEING": row["AO_SEEING"],
         "LAMBDA_LUCI": row["LAMBDA_LUCI"],
         "SR_LUCI": row["SR_LUCI"]
     }
@@ -334,7 +348,13 @@ if analysis_mode == "single":
         print("SR_SLOPES_TTFREE:", row["SR_SLOPES_TTFREE"])
         print("TT residual [nm]:", tt_residual_nm)
         
-    output = run_saeb(seeing=row["DIMM"], magnitude=row["WFS_MAG"], binning=row["BINNING"],
+    if use_ao_seeing:
+        seeing_single = row["AO_SEEING"] 
+        
+    else:
+        seeing_single = row["DIMM"]  
+        
+    output = run_saeb(seeing=seeing_single, magnitude=row["WFS_MAG"], binning=row["BINNING"],
                       ao_framerate=row["AO_FRAMERATE"], output_info=output_info)
     
     print("\nOUTPUT:", output)
@@ -381,8 +401,13 @@ elif analysis_mode == "all":
         binning = group_name[1]
         ao_framerate = group_name[2]
         tn_case = group_df["TN"].iloc[0]
-    
-        dimm_median = group_df["DIMM"].median()
+
+        if use_ao_seeing: 
+            seeing_median = group_df["AO_SEEING"].median()
+                
+        else:
+            seeing_median = group_df["DIMM"].median() 
+        
         wfs_mag_median = group_df["WFS_MAG"].median()
 
         if "SR_SLOPES" in group_df.columns and "SR_SLOPES_TTFREE" in group_df.columns:
@@ -430,7 +455,7 @@ elif analysis_mode == "all":
         print("STAR_ID:", star_id)
         print("BINNING:", binning)
         print("AO_FRAMERATE:", ao_framerate)
-        print("DIMM median:", dimm_median)
+        print("SEEING median:", seeing_median)
         print("WFS_MAG median:", wfs_mag_median)
         print("LAMBDA_LUCI:", lambda_luci)
         print("SR_LUCI:", sr_luci)
@@ -445,7 +470,7 @@ elif analysis_mode == "all":
             "STAR_ID": star_id,
             "BINNING": binning,
             "AO_FRAMERATE": ao_framerate,
-            "DIMM_MEDIAN": dimm_median,
+            "SEEING_MEDIAN": seeing_median,
             "WFS_MAG_MEDIAN": wfs_mag_median,
             "LAMBDA_LUCI":lambda_luci,
             "SR_LUCI": sr_luci,
@@ -454,7 +479,7 @@ elif analysis_mode == "all":
             "TT_RESIDUAL_NM": tt_residual_nm
          }
     
-        output = run_saeb(seeing=dimm_median, magnitude=wfs_mag_median, binning=binning, 
+        output = run_saeb(seeing=seeing_median, magnitude=wfs_mag_median, binning=binning, 
                           ao_framerate=ao_framerate, output_info=output_info)
     
         summary.append(output)
