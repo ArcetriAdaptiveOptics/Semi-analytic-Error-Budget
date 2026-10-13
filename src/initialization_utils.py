@@ -1,3 +1,4 @@
+import re
 from types import SimpleNamespace
 
 import numpy as np
@@ -43,7 +44,7 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
     seeing = param['atmosphere']['seeing']
     r0 = seeing_to_r0(seeing)
 
-    F_excess_noise = np.sqrt(param['wavefront_sensor']['value_for_F_excess_noise'])
+    F_excess_noise = param['wavefront_sensor']['value_for_F_excess_noise']
     sky_background = param['wavefront_sensor']['sky_backgr']
     dark_current = param['wavefront_sensor']['dark_curr']
     readout_noise = param['wavefront_sensor']['noise_readout']
@@ -178,9 +179,17 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
     #                             modulation_radius=modulation_radius,
     #                             actuators_number=n_actuators)
     
-    c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
-                                    modulation_radius, n_actuators,
-                                    modulation_radii=(0.0, 4.0))
+    mod_low =  re.search(r'_mod(\d+)\.fits$', file_optg[0])
+    mod_high =  re.search(r'_mod(\d+)\.fits$', file_optg[1])
+    
+    if mod_low is None or mod_high is None:
+        raise ValueError("Could not extract modulation values from file names. Ensure the file names contain '_modX.fits' where X is the modulation value.")
+    else:
+        mod_low_value = float(mod_low.group(1))
+        mod_high_value = float(mod_high.group(1))
+        c_optg = compute_optical_gain(file_optg[0], file_optg[1], seeing, 
+                                        modulation_radius, n_actuators,
+                                        modulation_radii=(mod_low_value, mod_high_value))
     
     # 5. initialize the optimization context for single mode control optimization
     

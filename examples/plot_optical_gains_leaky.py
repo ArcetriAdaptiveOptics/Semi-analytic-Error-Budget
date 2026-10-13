@@ -13,23 +13,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from src.Functions import compute_optical_gain, load_parameters
+from src.config_utils import resolve_binning_config
+
 
 DEFAULT_TABLE_PATH = 'optical_gain'
 DEFAULT_FIGURE_PATH = 'optical_gain'
-PARAMS_YAML_FILE = 'config_yaml/params_4000modes_ModRad_1_seeing_0.4.yaml'
+PARAMS_YAML_FILE = 'config_yaml/sensor_fusion/bin2/params_ModRad_3_bin2_800nm.yaml'
 
 def plot_modal_optical_gains(params_yaml_file=PARAMS_YAML_FILE, save_fig=False, save_tables=False,show_fig=True):
     # 1. Load configuration parameters
     param = load_parameters(params_yaml_file)
+    param = resolve_binning_config(param)
+    
     file_mod0 = param['data']['optical_gain_models'][0]
     file_mod4 = param['data']['optical_gain_models'][1]
+
     n_modes = param['control']['n_modes']
 
     # 2. Define the physical grid to explore
     seeing_values = [0.4, 0.6, 0.8, 1.0, 1.2, 1.4]
     
     # Modulation radii values for separate figures
-    modulation_radii = [0.0, 1.0, 2.0, 3.0, 4.0] 
+    modulation_radii = [0.0, 1.0, 2.0, 3.0] 
 
     # X-axis (Mode index, starting from 1 to match the paper's 1-based indexing in plots)
     mode_axis = np.arange(1, n_modes + 1)
@@ -87,7 +92,7 @@ def plot_modal_optical_gains(params_yaml_file=PARAMS_YAML_FILE, save_fig=False, 
     # PLOT TYPE 2: Optical Gain vs Seeing (for specific modes)
     # =========================================================================
     # Target modes to plot (0-indexed)
-    desired_modes = [0, 2, 100, 200, 400, 700, 1000, 2000, 3000, 3999]  # -1 will be handled as the last mode
+    desired_modes = [0, 2, 50, 100, 200, 400, 700, 1000, 1300, 1599]  # -1 will be handled as the last mode
     
     # Check that requested modes exist in the currently loaded configuration
     valid_modes = [m for m in desired_modes if m < n_modes]
