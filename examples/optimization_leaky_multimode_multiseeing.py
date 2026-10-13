@@ -144,8 +144,6 @@ def optimization_leaky_multimode_multiseeing(
                 print("plant num and den:", plant_num, plant_den)
                 print("Cost function value:", cost_function_value_no_opti)
                 print()
-                # print("Evaluation result (variance terms):")
-                # print_psd_variance_terms(evaluate_no_opti, init_params['omega'], mode="in")
                 print("Evaluation result (RMS):")
                 RMS_no_opti = print_psd_RMS_terms(evaluate_no_opti, init_params['omega'], mode="in")
                 print("Initial Gain:", x0_leaky[0])
@@ -179,15 +177,11 @@ def optimization_leaky_multimode_multiseeing(
                 H_n_tf_optimized = res_cost_optimized['H_n_tf']
                 H_r_tf_optimized = res_cost_optimized['H_r_tf']
                 H_ol_margins_optimized = res_cost_optimized['H_ol_margins']
-
-                # H_n_bandwidth_optimized_Hz = res_cost_optimized['bandwidth_H_n'] * 180 / np.pi
                 
                 print()  
                 print("============ After Optimization ===========") 
                 print()  
                 print("Cost function value:", cost_function_value_optimized )
-                # print("Evaluation result:")
-                # print_psd_variance_terms(evaluate_optimized, init_params['omega'], mode="out")
                 print("Evaluation result (RMS):")
                 RMS_optimized = print_psd_RMS_terms(evaluate_optimized, init_params['omega'], mode="out")
 
@@ -322,7 +316,6 @@ if __name__ == "__main__":
         save_table=True,
         show_fig=False)
     
-    # weight for different terms in cost functions: 
     # cost = cost_variance_without_fitting * weight[0]
     #      + penalty for stability * weight[1]
     #      + stability margin * weight[2]

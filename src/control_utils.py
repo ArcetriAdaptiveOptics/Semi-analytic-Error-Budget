@@ -223,7 +223,7 @@ def cost(obj_to_optimize,
     """
     
     if weight_cost is None:
-        weight_cost = np.array([1, 1, 10, 10, 10, 0], dtype=float)
+        weight_cost = np.array([1, 1, 0, 10, 10, 0], dtype=float)
             
     cost_function = (cost_variance_without_fitting * weight_cost[0] 
                     + stability_penalty * weight_cost[1]
