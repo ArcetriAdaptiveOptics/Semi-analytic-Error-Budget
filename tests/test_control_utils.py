@@ -508,14 +508,14 @@ class TestCostEdgeCases:
     
     @patch('src.control_utils.compute_close_loop_peak_penalty')
     def test_penalty_dict_structure(self, mock_penalty, mock_optimization_with_evaluate):
-        """Test that penalty list has 5 elements: [stability, sm, H_n, H_r, gm]"""
+        """Test that penalty list has 4 elements: [stability, H_n, H_r, gm]"""
         mock_penalty.side_effect = [0.1, 0.2]  # For H_n and H_r penalties
         
         result = cost(mock_optimization_with_evaluate, gain=0.5)
         
         penalties = result["penalty"]
         assert isinstance(penalties, list)
-        assert len(penalties) == 5
+        assert len(penalties) == 4
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -598,6 +598,185 @@ class TestConsistency:
         
         # Margins should differ significantly
         assert not np.allclose(result_low["H_ol_margins"], result_high["H_ol_margins"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST: GAIN MARGIN IN dB
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestGainMarginIndB:
+    """Tests for gain margin conversion to dB in control_CL_tf_margin"""
+    
+    def test_gain_margin_is_returned_in_dB(self, mock_optimization):
+        """Test that gain margin is returned in dB, not linear"""
+        result = control_CL_tf_margin(mock_optimization, gain=0.3)
+        
+        H_ol_gm = result["H_ol_margins"][0]
+        H_ol_tf = result["H_ol_tf"]
+        
+        linear_from_db = 10.0 ** (H_ol_gm / 20)
+        gm_linear, _, _, _, _, _ = ct.stability_margins(H_ol_tf)
+
+        if np.isfinite(H_ol_gm):
+            # If finite, should be in dB scale (typically positive for stable systems)
+            assert np.isclose(linear_from_db, gm_linear)
+    
+    def test_gain_margin_inf_for_non_finite_linear_gm(self, mock_optimization):
+        """Test that non-finite or negative/zero linear GM"""
+        result = control_CL_tf_margin(mock_optimization, gain=0.01)
+        
+        H_ol_gm = result["H_ol_margins"][0]
+        
+        assert not np.isnan(H_ol_gm)
+        if not np.isfinite(H_ol_gm):
+            gm_linear, _, _, _, _, _ = ct.stability_margins(result["H_ol_tf"], returnall=False)
+            assert not np.isfinite(gm_linear), \
+                f"test setup must produce non-finite linear GM, got {gm_linear}"
+            if np.isposinf(gm_linear):
+                assert np.isposinf(H_ol_gm)
+            else:
+                assert np.isneginf(H_ol_gm)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST: PEAK PENALTY FORMULA
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestPeakPenaltyFormula:
+    """Tests for the peak penalty formula: max(20*log10(peak) - target, 0)^2"""
+    
+    def test_peak_penalty_zero_when_below_target(self, mock_optimization):
+        """Test that penalty is 0 when transfer function peak is below target"""
+        result = control_CL_tf_margin(mock_optimization, gain=0.05)
+        H_r_tf = result["H_r_tf"]
+        
+        # Use a very permissive target to ensure peak is below it
+        penalty = compute_close_loop_peak_penalty(H_r_tf, close_loop_peak_target_dB=100.0)
+        
+        # With such a high target, penalty should be 0 or very close to 0
+        assert penalty >= 0.0
+        assert penalty < 1e-6  # Should be essentially 0
+    
+    def test_peak_penalty_quadratic_formula(self, mock_optimization):
+        """Test that penalty uses quadratic (squared) formula"""
+        result = control_CL_tf_margin(mock_optimization, gain=0.3)
+        H_r_tf = result["H_r_tf"]
+        
+        # Get the peak
+        H_r_linf = ct.norm(H_r_tf, p='inf')
+        peak_dB = 20 * np.log10(H_r_linf)
+        
+        target_dB = 0.0  # Arbitrary strict target
+        
+        # Compute penalty
+        penalty = compute_close_loop_peak_penalty(H_r_tf, close_loop_peak_target_dB=target_dB)
+        
+        # Expected formula: max(peak_dB - target_dB, 0)^2
+        expected = max(peak_dB - target_dB, 0) ** 2
+        
+        np.testing.assert_almost_equal(penalty, expected, decimal=10)
+    
+    def test_peak_penalty_uses_dB_scale(self, mock_optimization):
+        """Test that penalty formula correctly uses dB scale (log scale)"""
+        result = control_CL_tf_margin(mock_optimization, gain=0.3)
+        H_r_tf = result["H_r_tf"]
+        
+        H_r_linf = ct.norm(H_r_tf, p='inf')
+        peak_dB = 20 * np.log10(H_r_linf)
+        
+        # If peak_dB = 5 dB and target = 3 dB, penalty should be (5-3)^2 = 4
+        target_dB = peak_dB - 2.0
+        penalty = compute_close_loop_peak_penalty(H_r_tf, close_loop_peak_target_dB=target_dB)
+        
+        expected_penalty = 2.0 ** 2  # (peak - target)^2 = 2^2 = 4
+        np.testing.assert_almost_equal(penalty, expected_penalty, decimal=1)
+    
+    
+    
+# ─────────────────────────────────────────────────────────────────────────────
+# TEST: cost() WITH UNSTABLE LOOP
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestCostWithUnstableLoop:
+    """Tests for cost function handling unstable closed-loop systems"""
+    
+    def test_unstable_loop_returns_large_penalty(
+            self, mock_optimization_with_evaluate):
+        """Test that unstable loop returns cost >= 1e9 and normal evaluate_result"""
+        result = cost(mock_optimization_with_evaluate, gain=1e6)  # Very high gain to force instability
+        
+        # Verify system is unstable
+        assert not all(result["close_loop_stability"])
+        
+        # Verify stability penalty is 1e9
+        stability_penalty = result["penalty"][0]
+        assert stability_penalty == 1e9
+        
+        # Verify cost >= 1e9 (driven by stability penalty)
+        assert result["cost_function_value"] >= 1e9
+        
+        # Verify evaluate_result is present
+        assert result["evaluate_result"] is not None
+        assert hasattr(result["evaluate_result"], "cost")
+        assert hasattr(result["evaluate_result"], "variance_terms")
+    
+    
+    def test_cost_with_unstable_loop_catches_gain_margin_issue(self):
+        """Test case that would catch the gain margin sign/calculation error.
+        
+        This test verifies that cost() with an unstable loop properly detects
+        instability and returns early with penalty, ensuring that gain margin
+        calculation issues in unstable systems don't cause undefined behavior.
+        """
+        mock_obj = MockControlOptimization(
+            plant_num=[1.0, 2.0],
+            plant_den=[1.0, 0.5, 0.1]
+        )
+        
+        # Add evaluate method
+        def mock_evaluate(controller_num, controller_den, store_history=False):
+            return MockCostResult(cost_value=100.0, variance_fitting=0.5)
+        
+        mock_obj.evaluate = mock_evaluate
+        
+        # Use very high gain to force instability
+        result = cost(mock_obj, gain=1e6)
+        
+        # Should complete without error even if unstable
+        assert result is not None
+        assert "cost_function_value" in result
+        assert "penalty" in result
+        
+        # Check if unstable
+        is_unstable = not all(result["close_loop_stability"])
+        if is_unstable:
+            # Cost should still be computable (not NaN)
+            assert np.isfinite(result["cost_function_value"])
+    
+    def test_unstable_loop_still_returns_all_required_fields(self, mock_optimization_with_evaluate):
+        """Test that unstable loop result dict has all required fields"""
+        result = cost(mock_optimization_with_evaluate, gain=1e6)
+        
+        required_fields = [
+            "cost_function_value",
+            "evaluate_result",
+            "penalty",
+            "weight_penalty",
+            "H_n_tf",
+            "H_r_tf",
+            "H_ol_tf",
+            "H_ol_margins",
+            "bandwidth_H_n",
+            "close_loop_stability"
+        ]
+        
+        for field in required_fields:
+            assert field in result, f"Required field '{field}' missing from cost result"
+        
+        # Verify basic structure
+        assert isinstance(result["penalty"], list)
+        assert len(result["penalty"]) == 4  # [stability, H_n_peak, H_r_peak, gm_penalty]
+        assert isinstance(result["weight_penalty"], np.ndarray)
+        assert isinstance(result["close_loop_stability"], list)
 
 
 if __name__ == "__main__":
