@@ -179,8 +179,8 @@ def init_parameters(param_dir,alpha_=DEFAULT_ALIASING_ALPHA):
     #                             modulation_radius=modulation_radius,
     #                             actuators_number=n_actuators)
     
-    mod_low =  re.search(r'_mod(\d+)\.fits$', file_optg[0])
-    mod_high =  re.search(r'_mod(\d+)\.fits$', file_optg[1])
+    mod_low =  re.search(r'_mod(\d+)(?=[_.])', file_optg[0])
+    mod_high =  re.search(r'_mod(\d+)(?=[_.])', file_optg[1])
     
     if mod_low is None or mod_high is None:
         raise ValueError("Could not extract modulation values from file names. Ensure the file names contain '_modX.fits' where X is the modulation value.")

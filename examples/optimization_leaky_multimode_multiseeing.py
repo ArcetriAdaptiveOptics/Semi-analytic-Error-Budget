@@ -58,10 +58,10 @@ warnings.filterwarnings(
 )
 
 def optimization_leaky_multimode_multiseeing(
-    param_dir='params_mod4_4000mods.yaml',
+    param_dir='params_mod4_4000modes.yaml',
     task_name=None,
     mode_index_set=[0],
-    weight_cost=[1.0, 1, 10, 100, 10],
+    weight_cost=None,
     cltf_limitation=[2.0, 3.0],  # dB, [H_n_peak_limitation, H_r_peak_limitation]
     seeing_set=None,
     magnitude_set=None,
@@ -305,7 +305,7 @@ def optimization_leaky_multimode_multiseeing(
 
 if __name__ == "__main__":
     obj_to_optimize = optimization_leaky_multimode_multiseeing(
-        param_dir = 'params_mod_3_bin2.yaml',
+        param_dir = 'params_mod3_bin2.yaml',
         task_name = 'andes_bin2',
         mode_index_set=[0, 2, 50, 100, 200, 400, 700,  1000,  1300, 1599], 
         weight_cost=[2, 1, 0, 1, 10, 2], # leave the third term as 0 to ignore the stability margin penalty
