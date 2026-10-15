@@ -27,6 +27,7 @@ from src.Functions import find_best_gain
 from src.Functions import compute_optical_gain
 from src.Functions import final_soul_optical_gain
 from src.Functions import gain_maximum_from_total_delay
+from src.Functions import DEFAULT_GAIN_MAX_MARGIN
 from src.Functions import optimize_gain_blocks
 from src.Functions import resolve_gain_mode
 
@@ -96,13 +97,10 @@ temporal_freqs_maximum = np.log10(1.0 / (2.0 * t_0))
 temporal_freqs_number = param['frequency_ranges']['temporal_freqs_n']
 temporal_freqs = np.logspace(temporal_freqs_minimum, temporal_freqs_maximum, temporal_freqs_number)
 omega_temporal_freqs = 2 * np.pi * temporal_freqs
-g_maximum_mapping = {                                                          
-    1: 2.0,                                                                    
-    2: 1.0,
-    3: 0.6,
-    4: 0.4
-}
-gain_maximum = g_maximum_mapping.get(total_delay)
+# Fraction of the stability-limit gain allowed in gain sweeps (1 = up to the limit,
+# default 0.8).
+gain_max_margin = float(param['control'].get('gain_max_margin', DEFAULT_GAIN_MAX_MARGIN))
+gain_maximum = gain_maximum_from_total_delay(total_delay, gain_max_margin)
 gain_number = param['control'].get('gain_n', None)
 gain_value = param['control'].get('gain_value', None)
 gain_block_sizes = param['control'].get('gain_block_sizes', param['control'].get('gain_blocks', None))
@@ -175,7 +173,7 @@ if gain_mode == 'block_optimization':
     if gain_value is not None:
         raise ValueError("gain_block_sizes cannot be combined with gain_value")
 
-    gain_maximum = gain_maximum_from_total_delay(total_delay)
+    gain_maximum = gain_maximum_from_total_delay(total_delay, gain_max_margin)
     gain_, gain_sweeps = optimize_gain_blocks(
         gain_min = gain_minimum,
         gain_max = gain_maximum,

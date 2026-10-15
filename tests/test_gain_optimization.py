@@ -20,7 +20,8 @@ class TestGainOptimizationHelpers(unittest.TestCase):
             normalize_gain_block_sizes([2, 2], 5)
 
     def test_gain_maximum_from_total_delay(self):
-        self.assertEqual(gain_maximum_from_total_delay(3), 0.6)
+        self.assertEqual(gain_maximum_from_total_delay(3, margin=1.0), 0.618)
+        self.assertAlmostEqual(gain_maximum_from_total_delay(3), 0.8 * 0.618)
 
     def test_resolve_gain_mode_prefers_explicit_value(self):
         self.assertEqual(resolve_gain_mode({"gain_mode": "fixed"}), "fixed")
@@ -344,3 +345,97 @@ class TestModalGainEdgeCases(unittest.TestCase):
         # tot_var must be the sum of rows 1 and 2 only
         expected = modal_variances[1] + modal_variances[2]
         np.testing.assert_array_almost_equal(tot_var, expected)
+
+
+class TestGainMaximumFromTotalDelay(unittest.TestCase):
+    """
+    Tests for gain_maximum_from_total_delay(total_delay, margin).
+
+    Closed-loop characteristic polynomial of the integrator g*Z/(Z-1) with a
+    pure delay of d frames:  (Z-1)*Z^d + g*Z.  The loop is stable iff all
+    roots lie strictly inside the unit circle.  The tabulated maximum gains
+    must be the stability limit rounded down.
+    """
+
+    DELAYS = (1, 2, 3, 4)
+
+    @staticmethod
+    def _max_root_modulus(gain, delay):
+        from src.Functions import funct_d2
+        poly = np.polyadd(np.polymul([1, -1], funct_d2(delay)), [gain, 0])
+        return np.max(np.abs(np.roots(poly)))
+
+    @classmethod
+    def _exact_stability_limit(cls, delay, tol=1e-6):
+        """Smallest g > 0 with max|root| >= 1: coarse scan, then bisection."""
+        step = 0.01
+        g_lo = 0.0
+        g_hi = None
+        for g in np.arange(step, 5.0, step):
+            if cls._max_root_modulus(g, delay) >= 1.0:
+                g_hi = g
+                break
+            g_lo = g
+        assert g_hi is not None, "no instability found below g=5"
+        while g_hi - g_lo > tol:
+            mid = 0.5 * (g_lo + g_hi)
+            if cls._max_root_modulus(mid, delay) >= 1.0:
+                g_hi = mid
+            else:
+                g_lo = mid
+        return 0.5 * (g_lo + g_hi)
+
+    def test_exact_limit_delay3_matches_golden_ratio(self):
+        self.assertAlmostEqual(self._exact_stability_limit(3),
+                               (np.sqrt(5) - 1) / 2, delta=1e-6)
+
+    def test_mapping_is_stability_limit_rounded_down(self):
+        for d in self.DELAYS:
+            with self.subTest(delay=d):
+                exact = self._exact_stability_limit(d)
+                mapped = gain_maximum_from_total_delay(d, margin=1.0)
+                # Small slack only for the bisection tolerance (exact limits
+                # for d=1,2 are 2.0 and 1.0).
+                self.assertLessEqual(mapped, exact + 1e-6)
+                self.assertLess(exact - mapped, 1e-3)
+
+    def test_gain_is_stable_with_gain_margin(self):
+        """margin < 1: strictly stable with GM >= 20*log10(1/margin).
+
+        margin = 1 returns the limit itself (exact for d = 1, 2), i.e. a
+        marginally stable loop; the sweeps never reach it because np.arange
+        excludes the end point.
+        """
+        for d in self.DELAYS:
+            limit = self._exact_stability_limit(d)
+            for m in (0.5, 0.8):
+                with self.subTest(delay=d, margin=m):
+                    gain = gain_maximum_from_total_delay(d, m)
+                    self.assertLess(self._max_root_modulus(gain, d), 1.0)
+                    gm_db = 20 * np.log10(limit / gain)
+                    self.assertGreaterEqual(gm_db, 20 * np.log10(1 / m) - 0.01)
+            with self.subTest(delay=d, margin=1.0):
+                self.assertLessEqual(self._max_root_modulus(gain_maximum_from_total_delay(d, margin=1.0), d),
+                                     1.0 + 1e-9)
+
+    def test_margin_scales_linearly(self):
+        for d in self.DELAYS:
+            with self.subTest(delay=d):
+                self.assertAlmostEqual(
+                    gain_maximum_from_total_delay(d, 0.5),
+                    0.5 * gain_maximum_from_total_delay(d, margin=1.0))
+                # default margin is 0.8
+                self.assertEqual(gain_maximum_from_total_delay(d),
+                                 gain_maximum_from_total_delay(d, margin=0.8))
+
+    def test_invalid_margin_raises(self):
+        for margin in (0, 0.0, -0.5, 1.01, 2.0):
+            with self.subTest(margin=margin):
+                with self.assertRaises(ValueError):
+                    gain_maximum_from_total_delay(3, margin)
+
+    def test_unsupported_delay_raises(self):
+        for d in (0, 5, -1):
+            with self.subTest(delay=d):
+                with self.assertRaises(ValueError):
+                    gain_maximum_from_total_delay(d)
