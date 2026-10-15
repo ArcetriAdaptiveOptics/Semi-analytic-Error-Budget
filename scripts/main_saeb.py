@@ -35,6 +35,7 @@ from src.Functions import turbulence_psd
 from src.Functions import vibration_variance
 from src.Functions import integrate_modal_psd
 from src.Functions import gain_maximum_from_total_delay
+from src.Functions import DEFAULT_GAIN_MAX_MARGIN
 from src.Functions import optimize_gain_blocks
 from src.Functions import resolve_gain_mode
 from src.plots import summary_display
@@ -222,7 +223,9 @@ def run(yaml_file, return_std=False):
         if control.get('gain_value') is not None or control.get('gain_vector') is not None:
             raise ValueError("gain_block_sizes cannot be combined with gain_value or gain_vector")
 
-        gain_maximum = gain_maximum_from_total_delay(total_delay)
+        gain_maximum = gain_maximum_from_total_delay(
+            total_delay, float(control.get('gain_max_margin', DEFAULT_GAIN_MAX_MARGIN))
+        )
         gain_, gain_sweeps = optimize_gain_blocks(
             gain_min = control['gain_min'],
             gain_max = gain_maximum,
