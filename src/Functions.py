@@ -1447,12 +1447,18 @@ def find_best_gain(gain_min, gain_max, omega_temp_freq_interval,
 # GAIN OPTIMIZATION SECTION
 # -----------------------------------------------------------------------------
 
+# Stability limit of the integrator g*Z/(Z-1) with a pure delay of d frames,
+# i.e. of the characteristic polynomial (Z-1)*Z^d + g*Z (rounded down).
 _GAIN_MAXIMUM_MAPPING = {
     1: 2.0,
     2: 1.0,
-    3: 0.6,
-    4: 0.4,
+    3: 0.618,
+    4: 0.445,
 }
+
+# Default fraction of the stability limit allowed in gain sweeps:
+# gain margin >= 20*log10(1/0.8) = 1.9 dB.
+DEFAULT_GAIN_MAX_MARGIN = 0.8
 
 _VALID_GAIN_MODES = {
     "fixed",
@@ -1461,8 +1467,15 @@ _VALID_GAIN_MODES = {
 }
 
 
-def gain_maximum_from_total_delay(total_delay):
-    """Return the maximum sweep gain associated with a control delay."""
+def gain_maximum_from_total_delay(total_delay, margin=DEFAULT_GAIN_MAX_MARGIN):
+    """Return the maximum sweep gain for a control delay.
+
+    ``margin`` (0 < margin <= 1) scales the integrator stability limit:
+    margin = 0.8 keeps a gain margin of at least 20*log10(1/0.8) = 1.9 dB.
+    """
+    if not 0.0 < margin <= 1.0:
+        raise ValueError(f"margin must be in (0, 1], got {margin}")
+
     gain_maximum = _GAIN_MAXIMUM_MAPPING.get(total_delay)
 
     if gain_maximum is None:
@@ -1471,7 +1484,7 @@ def gain_maximum_from_total_delay(total_delay):
             f"{sorted(_GAIN_MAXIMUM_MAPPING)}"
         )
 
-    return gain_maximum
+    return margin * gain_maximum
 
 
 def resolve_gain_mode(control):
