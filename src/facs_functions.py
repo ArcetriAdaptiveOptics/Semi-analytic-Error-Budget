@@ -21,18 +21,27 @@ Two properties set FACS apart from the P-WFS branch and shape this module:
 
 Noise propagation follows the semi-analytical/numerical route described in
 the project drafts (as opposed to the closed-form dual-Gaussian WCoG
-formulas): a diffraction-limited spot and a Gaussian weighting function are
-built on a pixel grid, per-pixel statistics are obtained from MASTSEL's
-``meanVarPixelThr``, and the resulting centroid-noise variance is propagated
-through the closed-loop NTF exactly like the P-WFS noise term.
+formulas). The FACS spot is the long-exposure PSF left by the pyramid's HO
+correction (MASTSEL ``longExposurePsf``, residual phase PSD flat inside the
+AO control radius and von Karman outside), integrated over the detector
+pixels. Per-pixel statistics come from MASTSEL's ``meanVarPixelThr``, the
+WCoG gain is calibrated numerically on that PSF, and the resulting
+centroid-noise variance is propagated through the closed-loop NTF exactly
+like the P-WFS noise term.
 """
 
 from typing import Tuple
 
 import numpy as np
 from mastsel.mavisUtilities import meanVarPixelThr, simple2Dgaussian, sigma_from_FWHM
+from mastsel.mavisPsf import Field, longExposurePsf
 
-from src.Functions import compute_noise_PSD_intermediate, compute_output_PSD_and_integrate
+from src.Functions import (
+    build_transfer_function,
+    compute_noise_PSD_intermediate,
+    compute_output_PSD_and_integrate,
+    temporal_variance,
+)
 
 # Tip/tilt WFE-to-angle conversion: theta[rad] = TILT_TO_ANGLE_FACTOR * a[m] / D,
 # for a wavefront tilt of amplitude 'a' (Noll Z2/Z3 normalization).
@@ -48,32 +57,120 @@ def _pixel_grid(n_pixels):
     return np.meshgrid(coords, coords)
 
 
-# Diffraction-limited PSF model, Eq. (16) in the FACS draft: a separable
-# sinc^2 spot sampled at n_samp pixels per lambda/D. Normalized to unit sum
-# so it can be scaled by any total photon flux.
+# Long-exposure FACS PSF behind the pyramid's HO correction, via MASTSEL's
+# longExposurePsf: OTF = OTF_tel * exp(-D_phi/2), with D_phi from a residual
+# phase PSD that is flat inside the AO control radius f_cut (HO temporal +
+# measurement + aliasing residual) and von Karman-shaped outside it, scaled to
+# the fitting-error variance of the budget. Tip/tilt is excluded: within one
+# FACS frame it is the measured signal, not a blur.
 
-def diffraction_limited_spot(n_pixels: int, n_samp: float,
-                             x0: float = 0.0, y0: float = 0.0) -> np.ndarray:
+def facs_long_exposure_psf(
+    n_pixels: int, n_samp: int, telescope_diameter: float, wavelength: float,
+    sigma2_inband_nm2: float, sigma2_fit_nm2: float, f_cut: float,
+    outer_scale: float, x0: float = 0.0, n_pix_pupil: int = None,
+) -> np.ndarray:
     """
-    Build a normalized diffraction-limited (sinc^2) spot on a pixel grid.
+    Long-exposure PSF of the HO-corrected pupil, integrated over the FACS pixels.
 
     Parameters
     ----------
     n_pixels : int
-        Side of the square pixel window.
-    n_samp : float
-        Detector sampling in pixels per lambda/D (e.g. 2 for Nyquist).
-    x0, y0 : float, optional
-        Spot center offset from the window center, in pixels.
+        Side of the square FACS pixel window.
+    n_samp : int
+        Detector sampling, in pixels per lambda/D (>= 2, so that the PSF
+        grid supports the full telescope OTF).
+    telescope_diameter : float
+        Telescope diameter D [m], unobstructed circular pupil.
+    wavelength : float
+        FACS sensing wavelength [m].
+    sigma2_inband_nm2 : float
+        HO residual variance inside the control radius [nm^2], spread
+        uniformly over |f| < f_cut.
+    sigma2_fit_nm2 : float
+        Fitting-error variance [nm^2], with a von Karman spectral shape for
+        |f| >= f_cut (normalized over the whole outer region, see below).
+    f_cut : float
+        AO control radius in the pupil-plane spatial frequency [1/m].
+    outer_scale : float
+        Outer scale L0 [m], only used for the shape of the fitting PSD.
+    x0 : float, optional
+        Spot center along x, in pixels from the window center (used for the
+        numerical WCoG gain calibration).
+    n_pix_pupil : int, optional
+        Pupil sampling; default puts the PSD grid edge at >= 2 f_cut, with at
+        least 128 pixels across the pupil.
 
     Returns
     -------
     np.ndarray
-        ``(n_pixels, n_pixels)`` intensity map, normalized to unit sum.
+        ``(n_pixels, n_pixels)`` map, fraction of the total flux per pixel.
+        The sum is < 1: light outside the window (halo, and fitting power
+        beyond the PSD grid, applied as a uniform exp(-sigma2_far) loss) is
+        lost for the WCoG.
     """
-    xx, yy = _pixel_grid(n_pixels)
-    spot = np.sinc((xx - x0) / n_samp) ** 2 * np.sinc((yy - y0) / n_samp) ** 2
-    return spot / np.sum(spot)
+    if n_samp < 2:
+        raise ValueError(f"n_samp must be >= 2 to support the telescope OTF, got {n_samp}")
+    if n_pix_pupil is None:
+        # PSD grid edge at >= 2 f_cut, and >= 128 px across the pupil: coarser
+        # masks bias the disk area (e.g. +0.6%, hence the PSF peak +0.4%, at 40 px).
+        n_pix_pupil = max(2 * int(np.ceil(2.0 * f_cut * telescope_diameter)), 128)
+    n_grid = int(round(n_samp * n_pix_pupil))
+    if not np.isclose(n_grid, n_samp * n_pix_pupil):
+        raise ValueError("n_samp * n_pix_pupil must be an integer")
+    pitch = telescope_diameter / n_pix_pupil
+
+    # PSF pixel = wavelength / (n_grid * pitch) = wavelength / (n_samp * D).
+    mask = Field(wavelength, n_grid, n_grid * pitch, xp=np)
+    mask.setAsTelescopeMask(telescope_diameter / 2)
+    otf_field = Field(wavelength, n_grid, n_grid * pitch, xp=np)
+    otf_field.sampling = mask.sampling.copy()
+    otf_field.pupilToOtf()
+    otf_tel = otf_field.sampling / np.max(np.abs(otf_field.sampling))
+
+    dk = 1.0 / (n_grid * pitch)
+    freqs = (np.arange(n_grid) - n_grid // 2) * dk
+    fxx, fyy = np.meshgrid(freqs, freqs)
+    f = np.hypot(fxx, fyy)
+    rad2_per_nm2 = (2 * np.pi * 1e-9 / wavelength) ** 2
+
+    # Residual variance per frequency pixel [rad^2]; f = 0 (piston) left empty.
+    w_pix = np.zeros((n_grid, n_grid))
+    inband = (f > 0) & (f < f_cut)
+    w_pix[inband] = sigma2_inband_nm2 * rad2_per_nm2 / np.count_nonzero(inband)
+    outband = f >= f_cut
+    k0_2 = 1.0 / outer_scale ** 2
+    # Integral of (f^2 + k0^2)^(-11/6) over |f| > f_cut, so that the outer
+    # region carries exactly sigma2_fit over the infinite plane.
+    vk_norm = 6 * np.pi / 5 * (f_cut ** 2 + k0_2) ** (-5 / 6)
+    w_pix[outband] = (sigma2_fit_nm2 * rad2_per_nm2 * dk ** 2 / vk_norm
+                      * (f[outband] ** 2 + k0_2) ** (-11 / 6))
+    sigma2_far = max(sigma2_fit_nm2 * rad2_per_nm2 - w_pix[outband].sum(), 0.0)
+
+    # longExposurePsf zero-pads the PSD to n_pad and gets the phase
+    # covariance as (kk * freq_range)^2 * ifft2(psd): this scaling makes the
+    # zero-lag covariance equal to sum(w_pix).
+    psd = Field(wavelength, n_grid, n_grid * dk, unit='rad', xp=np)
+    n_pad = n_grid + 2 * (n_grid // 2)
+    psd.sampling = w_pix * n_pad ** 2 / (psd.kk * psd.width) ** 2
+
+    # The FFT PSF is centered on grid pixel n_grid//2; the WCoG window center
+    # sits half a pixel away for even n_pixels. A phase ramp on the OTF moves
+    # the spot exactly (no interpolation).
+    offset = 0.5 if n_pixels % 2 == 0 else 0.0
+    lags = np.arange(n_grid) - n_grid // 2
+    uu, vv = np.meshgrid(lags, lags)
+    ramp = np.exp(2j * np.pi * (uu * (x0 - offset) + vv * (-offset)) / n_grid)
+    # Pixel integration: OTF times the pixel MTF, sinc(rho / (n_samp D)) per
+    # axis, i.e. sinc(lag / n_grid); the PSF sampled at pixel centers then
+    # gives the flux integrated over each pixel.
+    mtf_pixel = np.sinc(uu / n_grid) * np.sinc(vv / n_grid)
+
+    psf = longExposurePsf(mask, psd, otf_tel=otf_tel * ramp * mtf_pixel).sampling
+    psf = np.clip(psf, 0.0, None)
+    psf = psf / psf.sum() * np.exp(-sigma2_far)
+
+    start = n_grid // 2 - n_pixels // 2
+    return psf[start:start + n_pixels, start:start + n_pixels]
 
 
 # Gaussian WCoG weighting function Fw(x,y) (Eq. 4 in the P. draft / Eq. 4 FACS
@@ -103,30 +200,38 @@ def wcog_weight(n_pixels: int, fwhm_weight: float,
     return simple2Dgaussian(xx, yy, x0=x0, y0=y0, sg=sigma_w)
 
 
-# Unit-gain WCoG normalization coefficient, Eq. (3) in the FACS draft.
+# Numerical WCoG gain (push-pull on the actual spot): the closed-form
+# N_W^2/(N_T^2+N_W^2) of Thomas et al. only holds for a Gaussian spot.
 
-def wcog_gamma(fwhm_spot: float, fwhm_weight: float) -> float:
+def wcog_gain_numerical(map_plus: np.ndarray, map_minus: np.ndarray,
+                        weight_map: np.ndarray, shift_pix: float) -> float:
     """
-    Compute the WCoG unit-response calibration coefficient gamma.
+    Small-signal WCoG response from two spots shifted by +/- shift_pix along x.
 
     Parameters
     ----------
-    fwhm_spot : float
-        FWHM of the spot intensity distribution, in pixels (N_T).
-    fwhm_weight : float
-        FWHM of the weighting function, in pixels (N_w).
+    map_plus, map_minus : np.ndarray
+        Spot intensity maps with the spot center at +shift_pix and -shift_pix.
+    weight_map : np.ndarray
+        WCoG weighting function, same shape as the maps.
+    shift_pix : float
+        Half the push-pull displacement, in pixels.
 
     Returns
     -------
     float
-        gamma = (N_T^2 + N_w^2) / N_w^2.
+        Measured shift per true shift; gamma = 1 / gain gives unit response.
     """
-    return (fwhm_spot ** 2 + fwhm_weight ** 2) / fwhm_weight ** 2
+    xx, _ = _pixel_grid(map_plus.shape[0])
+
+    def wcog_x(spot):
+        return np.sum(xx * spot * weight_map) / np.sum(spot * weight_map)
+
+    return float((wcog_x(map_plus) - wcog_x(map_minus)) / (2 * shift_pix))
 
 
-# Maréchal approximation for the Strehl ratio, used to account for the
-# pyramid's own HO residual broadening the FACS PSF (a full-aperture sensor
-# looks at the same, not-perfectly-corrected, focal-plane image).
+# Maréchal approximation for the Strehl ratio. Used as a diagnostic: it is the
+# fraction of light left in the diffraction-limited core of the FACS PSF.
 
 def strehl_ratio_marechal(residual_rms_nm: float, wavelength: float) -> float:
     """
@@ -150,44 +255,6 @@ def strehl_ratio_marechal(residual_rms_nm: float, wavelength: float) -> float:
     """
     sigma_rad = residual_rms_nm * 1e-9 * 2 * np.pi / wavelength
     return float(np.exp(-sigma_rad ** 2))
-
-
-# Approximate PSF-core broadening from a Strehl-ratio degradation, applied
-# consistently to both the sinc^2 spot map (via n_samp) and the WCoG gamma
-# calibration (via fwhm_spot_pix).
-
-def broaden_spot_for_strehl(n_samp: float, fwhm_spot_pix: float,
-                            strehl: float) -> Tuple[float, float]:
-    """
-    Scale the diffraction-limited sampling and spot FWHM for a given Strehl.
-
-    Uses ``FWHM_eff = FWHM_diffraction / sqrt(S)``: for a roughly Gaussian
-    core that conserves total energy, peak intensity scales as S and peak
-    scales as 1/FWHM^2, so FWHM scales as 1/sqrt(S). This is an
-    approximation of the true core+halo PSF shape (consistent in spirit
-    with the pyramid's own Strehl-derived sensitivity-loss factor, not a
-    substitute for a full PSF simulation from the residual spatial PSD),
-    and becomes increasingly rough as the Strehl drops much below ~0.2.
-
-    Parameters
-    ----------
-    n_samp : float
-        Diffraction-limited detector sampling, in pixels per lambda/D.
-    fwhm_spot_pix : float
-        Diffraction-limited spot FWHM, in pixels.
-    strehl : float
-        Strehl ratio, in (0, 1]. 1.0 leaves both inputs unchanged.
-
-    Returns
-    -------
-    tuple[float, float]
-        ``(n_samp_effective, fwhm_spot_pix_effective)``.
-    """
-    if not 0.0 < strehl <= 1.0:
-        raise ValueError(f"strehl must be in (0, 1], got {strehl}")
-
-    broadening = 1.0 / np.sqrt(strehl)
-    return n_samp * broadening, fwhm_spot_pix * broadening
 
 
 # Per-pixel mean/variance including photon, read-out, background and excess
@@ -248,7 +315,7 @@ def facs_centroid_noise_variance_pix(flux_map: np.ndarray, weight_map: np.ndarra
     sigma2_map : np.ndarray
         Per-pixel noise variance, same shape as ``flux_map``.
     gamma : float
-        Unit-gain WCoG calibration coefficient (``wcog_gamma``).
+        Unit-gain WCoG calibration coefficient (1 / ``wcog_gain_numerical``).
 
     Returns
     -------
@@ -297,46 +364,39 @@ def facs_centroid_variance_pix_to_tiptilt_nm2(
     return sigma2_arcsec * nm_per_arcsec ** 2
 
 
-# Orchestrates the whole pixel-domain -> nm^2 chain for one frame.
+# Pixel-domain -> nm^2 chain for one frame, given the spot map and its gain.
 
 def facs_slope_noise_variance_nm2(
-    photon_flux_total: float, ron: float, sky_bkg: float, dark_curr: float,
-    excess_noise_factor2: float, n_pixels: int, n_samp: float,
-    fwhm_spot_pix: float, fwhm_weight_pix: float, pixel_scale_arcsec: float,
-    telescope_diameter: float, threshold: float = -np.inf, order: int = 30,
-    npoints: int = 1000, tilt_to_angle_factor: float = DEFAULT_TILT_TO_ANGLE_FACTOR,
+    flux_map: np.ndarray, weight_map: np.ndarray, gamma: float, ron: float,
+    sky_bkg: float, dark_curr: float, excess_noise_factor2: float,
+    pixel_scale_arcsec: float, telescope_diameter: float,
+    threshold: float = -np.inf, order: int = 30, npoints: int = 1000,
+    tilt_to_angle_factor: float = DEFAULT_TILT_TO_ANGLE_FACTOR,
 ) -> float:
     """
     Compute the FACS tip/tilt measurement-noise variance for one frame.
 
-    Builds the diffraction-limited spot and Gaussian WCoG weighting function
-    on a pixel grid, obtains per-pixel noise statistics from
-    ``facs_pixel_noise_variance`` (MASTSEL's ``meanVarPixelThr``), and
-    converts the resulting centroid-noise variance to a tip/tilt WFE
-    variance in nm^2. By construction sigma_x^2 == sigma_y^2 (circular
-    symmetry), so the returned value applies to both tip and tilt.
-
-    ``n_samp``/``fwhm_spot_pix`` are taken at face value as the spot's
-    actual sampling/FWHM: if the HO residual left by the pyramid degrades
-    the FACS PSF below the diffraction limit, pre-broaden them with
-    ``broaden_spot_for_strehl`` before calling this function.
+    Per-pixel noise statistics come from ``facs_pixel_noise_variance``
+    (MASTSEL's ``meanVarPixelThr``); the WCoG centroid-noise variance
+    (Eq. 17/18), referred to unit gain through ``gamma``, is converted to a
+    tip/tilt WFE variance. sigma_x^2 == sigma_y^2 for a round spot, so the
+    returned value applies to both tip and tilt.
 
     Parameters
     ----------
-    photon_flux_total : float
-        Total detected photoelectrons per frame over the whole pupil.
+    flux_map : np.ndarray
+        Expected photoelectrons per pixel per frame (e.g. total flux times
+        ``facs_long_exposure_psf``).
+    weight_map : np.ndarray
+        WCoG weighting function (``wcog_weight``).
+    gamma : float
+        Unit-response calibration, 1 / ``wcog_gain_numerical``.
     ron : float
         Read-out noise, RMS electrons per pixel.
     sky_bkg, dark_curr : float
         Sky-background and dark-current photoelectrons per pixel per frame.
     excess_noise_factor2 : float
         Excess-noise power factor F^2.
-    n_pixels : int
-        Side of the square pixel window used for the WCoG.
-    n_samp : float
-        Detector sampling in pixels per lambda/D.
-    fwhm_spot_pix, fwhm_weight_pix : float
-        FWHM (pixels) of the spot and of the WCoG weighting function.
     pixel_scale_arcsec : float
         Detector plate scale, in arcsec per pixel.
     telescope_diameter : float
@@ -351,16 +411,10 @@ def facs_slope_noise_variance_nm2(
     float
         Tip/tilt measurement-noise variance, in nm^2.
     """
-    spot = diffraction_limited_spot(n_pixels, n_samp)
-    flux_map = spot * photon_flux_total
-    weight_map = wcog_weight(n_pixels, fwhm_weight_pix)
-    gamma = wcog_gamma(fwhm_spot_pix, fwhm_weight_pix)
-
     _, sigma2_map = facs_pixel_noise_variance(
         flux_map, ron, sky_bkg, dark_curr, excess_noise_factor2,
         threshold, order, npoints,
     )
-
     sigma2_pix = facs_centroid_noise_variance_pix(flux_map, weight_map, sigma2_map, gamma)
 
     return facs_centroid_variance_pix_to_tiptilt_nm2(
@@ -412,6 +466,55 @@ def facs_measurement_variance(
         print(f"FACS tip/tilt measurement standard deviation CL: {np.sqrt(variance_CL)} nm")
 
     return variance_OL, variance_CL, PSD_output, PSD_input
+
+
+# Integrator-gain sweep for the FACS tip/tilt loop. Same policy as the
+# pyramid's optimize_gain_blocks: the cost is the closed-loop variance only
+# (temporal + measurement), with no stability-margin constraint, so the
+# optimum can sit at the top of the sweep, i.e. close to the stability limit.
+
+def facs_gain_sweep(
+    gain_values: np.ndarray, omega_temp_freq_interval: np.ndarray, t_0: float,
+    plant_num: np.ndarray, plant_den: np.ndarray, psd_atmo_tt: np.ndarray,
+    psd_vib_tt: np.ndarray, sigma2_tt_nm2: float,
+) -> Tuple[float, np.ndarray]:
+    """
+    Pick the integrator gain minimizing the FACS tip/tilt closed-loop variance.
+
+    Parameters
+    ----------
+    gain_values : np.ndarray
+        Candidate integrator gains (same gain for tip and tilt).
+    omega_temp_freq_interval : np.ndarray
+        Angular temporal frequency vector of the FACS loop [rad/s].
+    t_0 : float
+        FACS sampling period [s].
+    plant_num, plant_den : np.ndarray
+        FACS plant polynomials (delay included in ``plant_den``).
+    psd_atmo_tt, psd_vib_tt : np.ndarray
+        Turbulence and vibration PSDs for tip and tilt, shape (2, N_freq).
+    sigma2_tt_nm2 : float
+        FACS tip/tilt measurement-noise variance in nm^2, per axis
+        (``facs_slope_noise_variance_nm2``); gain-independent.
+
+    Returns
+    -------
+    tuple[float, np.ndarray]
+        ``(best_gain, variances)``; ``variances`` has shape (N_gain, 2) with
+        the closed-loop temporal and measurement variances [nm^2], each summed
+        over tip and tilt.
+    """
+    variances = np.zeros((len(gain_values), 2))
+    for k, gain in enumerate(gain_values):
+        H_r, H_n = build_transfer_function(
+            omega_temp_freq_interval, t_0, 2, plant_num, plant_den, gain=np.full(2, gain),
+        )
+        _, var_temp, _, _ = temporal_variance(psd_atmo_tt, psd_vib_tt, H_r, 2, omega_temp_freq_interval)
+        _, var_meas, _, _ = facs_measurement_variance(H_n, omega_temp_freq_interval, sigma2_tt_nm2)
+        variances[k] = np.real(var_temp), np.real(var_meas)
+
+    best = int(np.argmin(variances.sum(axis=1)))
+    return float(gain_values[best]), variances
 
 
 # Combines the HO (pyramid) and TT (FACS) contributions into one system

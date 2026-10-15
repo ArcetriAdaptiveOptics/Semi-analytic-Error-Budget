@@ -92,10 +92,13 @@ control:
   # Gain policy: block_optimization means one optimized gain per block.
   gain_mode: block_optimization
   gain_min: 0.01
+  # Fraction of the integrator stability-limit gain allowed in gain sweeps
+  # (0 < margin <= 1; 1 = up to the limit; 0.8, the default, = gain margin >= 1.9 dB).
+  gain_max_margin: 0.8
   # Optional block-wise gain optimization. Each value is the number of modes
   # optimized together with one shared gain. The first block (2 modes) is
   # the pyramid's own tip/tilt gain, computed for completeness but unused:
-  # tip/tilt is corrected using the FACS loop (control_facs.gain_value).
+  # tip/tilt is corrected using the FACS loop (swept FACS gain).
   gain_block_sizes: [2, 98, 900, 1000, 1000, 1000]
   # Binning
   bin: 1
@@ -132,24 +135,22 @@ wavefront_sensor_facs:
   flux_split: 0.1
   # Pixel window around the spot used for the WCoG (n_pixels x n_pixels)
   n_pixels: 16
-  # Detector sampling, in pixels per lambda/D (2 = Nyquist -> 0.5 lambda/D/pixel)
+  # Detector sampling, in pixels per lambda/D (integer >= 2; 2 = Nyquist).
+  # The pixel scale follows as wavelength / (n_samp * telescope_diam).
   n_samp: 2
-  # Diffraction-limited spot FWHM in pixels (~0.886 * n_samp for a sinc^2 spot)
-  fwhm_spot_pix: 1.772
   # WCoG Gaussian weighting-function FWHM in pixels
   fwhm_weight_pix: 2.0
-  # Pixel scale in [arcsec/pixel] = 0.5*(wavelength/telescope_diam)*206264.8
-  # for n_samp=2 and the telescope/wavelength above.
-  pixel_scale_arcsec: 2.1431e-3
   # meanVarPixelThr threshold / iteration controls (see MASTSEL docs)
   threshold: -.inf
   order: 30
   npoints: 1000
 
 control_facs:
-  # Fixed closed-loop gain for the tip/tilt loop driven by FACS (not
-  # auto-optimized in this first iteration; see Total_Variance_FACS.py).
-  gain_value: 0.3
+  # The FACS loop gain is not set here: Total_Variance_FACS.py sweeps it
+  # (control.gain_min .. gain_max_margin * stability-limit gain for the FACS
+  # delay, step 0.05) and keeps the minimum-variance value, as for the
+  # pyramid blocks.
+  # gain_max_margin: 0.8   # optional, defaults to control.gain_max_margin
   # Optional: FACS detector/RTC timing. Each defaults to the pyramid value
   # (control.sampling_time, plant.total_delay) if absent, except that
   # total_delay becomes mandatory when sampling_time differs from the

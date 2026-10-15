@@ -11,48 +11,139 @@ Run from the Semi-analytic-Error-Budget root with:
 import unittest
 
 import numpy as np
+from scipy.integrate import dblquad
+from scipy.special import j1
 from mastsel.mavisUtilities import meanVarPixelThr
 
 from src.Functions import compute_noise_PSD_intermediate, compute_output_PSD_and_integrate
 from src.facs_functions import (
     CRAD2AS,
-    diffraction_limited_spot,
+    facs_long_exposure_psf,
     wcog_weight,
-    wcog_gamma,
+    wcog_gain_numerical,
     strehl_ratio_marechal,
-    broaden_spot_for_strehl,
     facs_pixel_noise_variance,
     facs_centroid_noise_variance_pix,
     facs_centroid_variance_pix_to_tiptilt_nm2,
     facs_slope_noise_variance_nm2,
     facs_measurement_variance,
     facs_total_variance,
+    facs_gain_sweep,
 )
+from src.Functions import build_transfer_function, temporal_variance, funct_d2
 
 
-class TestDiffractionLimitedSpot(unittest.TestCase):
+# Cheap but realistic PSF set-up: 8 m telescope at 800 nm, ~300 controlled modes.
+D_TEL = 8.0
+WAVELENGTH = 800e-9
+N_SAMP = 2
+OUTER_SCALE = 25.0
+F_CUT = np.sqrt(300 / np.pi) / D_TEL
+N_PIX = 16
+RAD2_TO_NM2 = (WAVELENGTH * 1e9 / (2 * np.pi)) ** 2
 
-    def test_normalized_to_unit_sum(self):
-        spot = diffraction_limited_spot(n_pixels=16, n_samp=2.0)
-        self.assertAlmostEqual(np.sum(spot), 1.0, places=12)
 
-    def test_non_negative(self):
-        spot = diffraction_limited_spot(n_pixels=16, n_samp=2.0)
-        self.assertTrue(np.all(spot >= 0.0))
+def _psf(s2_inband_rad2=0.0, s2_fit_rad2=0.0, n_pixels=N_PIX, x0=0.0):
+    """Build a FACS PSF with residuals given in rad^2."""
+    return facs_long_exposure_psf(
+        n_pixels, N_SAMP, D_TEL, WAVELENGTH,
+        s2_inband_rad2 * RAD2_TO_NM2, s2_fit_rad2 * RAD2_TO_NM2,
+        F_CUT, OUTER_SCALE, x0=x0,
+    )
 
-    def test_peak_at_window_center(self):
-        n_pixels = 17  # odd -> exact center pixel
-        spot = diffraction_limited_spot(n_pixels=n_pixels, n_samp=2.0)
-        center = n_pixels // 2
-        self.assertEqual(np.unravel_index(np.argmax(spot), spot.shape), (center, center))
 
-    def test_offset_shifts_the_peak(self):
-        n_pixels = 17
-        spot = diffraction_limited_spot(n_pixels=n_pixels, n_samp=2.0, x0=2.0, y0=0.0)
-        center = n_pixels // 2
-        peak_row, peak_col = np.unravel_index(np.argmax(spot), spot.shape)
-        self.assertEqual(peak_row, center)
-        self.assertEqual(peak_col, center + 2)
+class TestFacsLongExposurePsf(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.psf0 = _psf()
+
+    def test_zero_residual_central_pixels_match_airy(self):
+        """Central pixels equal the Airy pattern integrated over one pixel."""
+        c = N_PIX // 2
+        central = self.psf0[c - 1:c + 1, c - 1:c + 1]
+
+        def airy(y, x):
+            # Unit-flux Airy, coordinates in pixels (lambda/D = N_SAMP pixels).
+            r = np.hypot(x, y) * np.pi / N_SAMP
+            return (np.pi / 4) / N_SAMP ** 2 * (1.0 if r == 0 else (2 * j1(r) / r) ** 2)
+
+        expected, _ = dblquad(airy, 0, 1, 0, 1, epsabs=1e-10)
+        np.testing.assert_allclose(central, expected, rtol=2e-3)
+
+    def test_zero_residual_symmetries(self):
+        np.testing.assert_allclose(self.psf0, self.psf0.T, rtol=1e-6, atol=1e-12)
+        np.testing.assert_allclose(self.psf0, self.psf0[::-1, :], rtol=1e-6, atol=1e-12)
+        np.testing.assert_allclose(self.psf0, self.psf0[:, ::-1], rtol=1e-6, atol=1e-12)
+
+    def test_zero_residual_window_flux(self):
+        self.assertGreater(self.psf0.sum(), 0.9)
+        self.assertLess(self.psf0.sum(), 1.0)
+
+    def test_inband_residual_reduces_peak_as_exp_minus_s2(self):
+        ratio = _psf(s2_inband_rad2=0.5).max() / self.psf0.max()
+        self.assertGreaterEqual(ratio, np.exp(-0.5))
+        self.assertAlmostEqual(ratio, np.exp(-0.5), delta=3e-2 * np.exp(-0.5))
+
+    def test_fitting_residual_reduces_peak_as_exp_minus_s2(self):
+        ratio = _psf(s2_fit_rad2=0.5).max() / self.psf0.max()
+        self.assertAlmostEqual(ratio, np.exp(-0.5), delta=3e-2 * np.exp(-0.5))
+
+    def test_window_flux_decreases_with_inband_variance(self):
+        flux = [_psf(s2_inband_rad2=s2).sum() for s2 in (0.0, 0.2, 0.5, 1.0)]
+        self.assertTrue(np.all(np.diff(flux) < 0))
+
+    def test_window_flux_decreases_with_fitting_variance(self):
+        flux = [_psf(s2_fit_rad2=s2).sum() for s2 in (0.0, 0.2, 0.5, 1.0)]
+        self.assertTrue(np.all(np.diff(flux) < 0))
+
+    def test_x0_shifts_map_by_one_column(self):
+        """x0 = +/-1 translates the whole spot by exactly one column.
+
+        The peak test via argmax is ill-posed here: for an even window the
+        spot center falls between two pixels of equal value.
+        """
+        inner = slice(2, N_PIX - 2)
+        shifted_right = _psf(x0=1.0)
+        shifted_left = _psf(x0=-1.0)
+        np.testing.assert_allclose(shifted_right[inner, 3:N_PIX - 1], self.psf0[inner, 2:N_PIX - 2],
+                                   rtol=1e-6, atol=1e-12)
+        np.testing.assert_allclose(shifted_left[inner, 1:N_PIX - 3], self.psf0[inner, 2:N_PIX - 2],
+                                   rtol=1e-6, atol=1e-12)
+
+    def test_rejects_undersampled_psf(self):
+        with self.assertRaises(ValueError):
+            facs_long_exposure_psf(N_PIX, 1, D_TEL, WAVELENGTH, 0.0, 0.0, F_CUT, OUTER_SCALE)
+
+
+class TestWcogGainNumerical(unittest.TestCase):
+
+    @staticmethod
+    def _gaussian(n_pixels, fwhm, x0):
+        xx, yy = np.meshgrid(*(2 * [np.arange(n_pixels) - (n_pixels - 1) / 2.0]))
+        sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
+        return np.exp(-((xx - x0) ** 2 + yy ** 2) / (2 * sigma ** 2))
+
+    def test_gaussian_spot_matches_thomas_closed_form(self):
+        n_t, n_w, shift = 6.0, 8.0, 0.01
+        plus = self._gaussian(64, n_t, shift)
+        minus = self._gaussian(64, n_t, -shift)
+        gain = wcog_gain_numerical(plus, minus, wcog_weight(64, n_w), shift)
+        self.assertAlmostEqual(gain, n_w ** 2 / (n_t ** 2 + n_w ** 2), delta=1e-3 * gain)
+
+    def test_uniform_weight_gives_unit_gain(self):
+        shift = 0.01
+        plus = self._gaussian(64, 6.0, shift)
+        minus = self._gaussian(64, 6.0, -shift)
+        gain = wcog_gain_numerical(plus, minus, np.ones((64, 64)), shift)
+        self.assertAlmostEqual(gain, 1.0, delta=1e-6)
+
+    def test_uniform_weight_on_long_exposure_psf_is_close_to_unity(self):
+        shift, n = 0.05, 32
+        plus = _psf(n_pixels=n, x0=shift)
+        minus = _psf(n_pixels=n, x0=-shift)
+        gain = wcog_gain_numerical(plus, minus, np.ones((n, n)), shift)
+        self.assertAlmostEqual(gain, 1.0, delta=0.05)
 
 
 class TestWcogWeight(unittest.TestCase):
@@ -66,18 +157,6 @@ class TestWcogWeight(unittest.TestCase):
     def test_symmetric_under_x_y_swap(self):
         weight = wcog_weight(n_pixels=16, fwhm_weight=2.0)
         np.testing.assert_allclose(weight, weight.T)
-
-
-class TestWcogGamma(unittest.TestCase):
-
-    def test_matches_closed_form(self):
-        fwhm_spot, fwhm_weight = 1.772, 2.0
-        expected = (fwhm_spot ** 2 + fwhm_weight ** 2) / fwhm_weight ** 2
-        self.assertAlmostEqual(wcog_gamma(fwhm_spot, fwhm_weight), expected, places=12)
-
-    def test_equals_one_in_the_narrow_weight_limit(self):
-        # As N_w -> infinity (very broad, weight -> uniform) gamma -> 1.
-        self.assertAlmostEqual(wcog_gamma(fwhm_spot=2.0, fwhm_weight=1e6), 1.0, places=6)
 
 
 class TestStrehlRatioMarechal(unittest.TestCase):
@@ -100,31 +179,6 @@ class TestStrehlRatioMarechal(unittest.TestCase):
         s = strehl_ratio_marechal(157.0, 800e-9)
         self.assertGreater(s, 0.0)
         self.assertLessEqual(s, 1.0)
-
-
-class TestBroadenSpotForStrehl(unittest.TestCase):
-
-    def test_unit_strehl_leaves_inputs_unchanged(self):
-        n_samp, fwhm = broaden_spot_for_strehl(2.0, 1.772, strehl=1.0)
-        self.assertAlmostEqual(n_samp, 2.0, places=12)
-        self.assertAlmostEqual(fwhm, 1.772, places=12)
-
-    def test_matches_inverse_sqrt_strehl_scaling(self):
-        strehl = 0.25
-        n_samp, fwhm = broaden_spot_for_strehl(2.0, 1.772, strehl)
-        self.assertAlmostEqual(n_samp, 2.0 / np.sqrt(strehl), places=12)
-        self.assertAlmostEqual(fwhm, 1.772 / np.sqrt(strehl), places=12)
-
-    def test_lower_strehl_broadens_more(self):
-        _, fwhm_mild = broaden_spot_for_strehl(2.0, 1.772, strehl=0.8)
-        _, fwhm_severe = broaden_spot_for_strehl(2.0, 1.772, strehl=0.2)
-        self.assertGreater(fwhm_severe, fwhm_mild)
-
-    def test_rejects_out_of_range_strehl(self):
-        with self.assertRaises(ValueError):
-            broaden_spot_for_strehl(2.0, 1.772, strehl=0.0)
-        with self.assertRaises(ValueError):
-            broaden_spot_for_strehl(2.0, 1.772, strehl=1.5)
 
 
 class TestFacsPixelNoiseVariance(unittest.TestCase):
@@ -204,30 +258,48 @@ class TestUnitConversion(unittest.TestCase):
 
 class TestFacsSlopeNoiseVarianceNm2(unittest.TestCase):
 
-    COMMON_KWARGS = dict(
-        ron=0.5, sky_bkg=0.0, dark_curr=0.0, excess_noise_factor2=1.0,
-        n_pixels=16, n_samp=2.0, fwhm_spot_pix=1.772, fwhm_weight_pix=2.0,
-        pixel_scale_arcsec=2.14e-3, telescope_diameter=38.5,
-    )
+    @classmethod
+    def setUpClass(cls):
+        cls.psf = _psf(s2_inband_rad2=0.1, s2_fit_rad2=0.1)
+        cls.weight = wcog_weight(N_PIX, 6.0)
 
-    def test_is_positive(self):
-        sigma2 = facs_slope_noise_variance_nm2(photon_flux_total=1e5, **self.COMMON_KWARGS)
-        self.assertGreater(sigma2, 0.0)
+    def setUp(self):
+        self.kwargs = dict(
+            weight_map=self.weight, gamma=1.3, ron=0.5, sky_bkg=0.2, dark_curr=0.1,
+            excess_noise_factor2=1.5, pixel_scale_arcsec=2.14e-3,
+            telescope_diameter=D_TEL,
+        )
 
-    def test_decreases_with_more_photons(self):
-        sigma2_faint = facs_slope_noise_variance_nm2(photon_flux_total=1e4, **self.COMMON_KWARGS)
-        sigma2_bright = facs_slope_noise_variance_nm2(photon_flux_total=1e8, **self.COMMON_KWARGS)
-        self.assertGreater(sigma2_faint, sigma2_bright)
+    def test_matches_manual_chain(self):
+        flux = 1e4 * self.psf
+        result = facs_slope_noise_variance_nm2(flux, **self.kwargs)
+
+        _, var_map = facs_pixel_noise_variance(
+            flux, 0.5, 0.2, 0.1, 1.5,
+        )
+        sigma2_pix = facs_centroid_noise_variance_pix(flux, self.weight, var_map, 1.3)
+        expected = facs_centroid_variance_pix_to_tiptilt_nm2(sigma2_pix, 2.14e-3, D_TEL)
+        self.assertGreater(result, 0.0)
+        np.testing.assert_allclose(result, expected, rtol=1e-12)
+
+    def test_photon_limited_variance_halves_when_flux_doubles(self):
+        kwargs = dict(self.kwargs, ron=0.0, sky_bkg=0.0, dark_curr=0.0,
+                      excess_noise_factor2=1.0)
+        var1 = facs_slope_noise_variance_nm2(1e6 * self.psf, **kwargs)
+        var2 = facs_slope_noise_variance_nm2(2e6 * self.psf, **kwargs)
+        np.testing.assert_allclose(var1 / var2, 2.0, rtol=1e-6)
+
+    def test_scales_as_gamma_squared(self):
+        flux = 1e4 * self.psf
+        var1 = facs_slope_noise_variance_nm2(flux, **dict(self.kwargs, gamma=1.0))
+        var2 = facs_slope_noise_variance_nm2(flux, **dict(self.kwargs, gamma=2.0))
+        np.testing.assert_allclose(var2 / var1, 4.0, rtol=1e-10)
 
     def test_increases_with_readout_noise(self):
-        kwargs_low_ron = dict(self.COMMON_KWARGS)
-        kwargs_low_ron['ron'] = 0.1
-        kwargs_high_ron = dict(self.COMMON_KWARGS)
-        kwargs_high_ron['ron'] = 5.0
-
-        sigma2_low = facs_slope_noise_variance_nm2(photon_flux_total=1e3, **kwargs_low_ron)
-        sigma2_high = facs_slope_noise_variance_nm2(photon_flux_total=1e3, **kwargs_high_ron)
-        self.assertGreater(sigma2_high, sigma2_low)
+        flux = 1e3 * self.psf
+        var_low = facs_slope_noise_variance_nm2(flux, **dict(self.kwargs, ron=0.1))
+        var_high = facs_slope_noise_variance_nm2(flux, **dict(self.kwargs, ron=5.0))
+        self.assertGreater(var_high, var_low)
 
 
 class TestFacsMeasurementVariance(unittest.TestCase):
@@ -276,6 +348,61 @@ class TestFacsTotalVariance(unittest.TestCase):
             var_temp_tt=5.0, var_meas_tt=5.0,
         )
         self.assertAlmostEqual(var_total, var_ho + var_tt, places=12)
+
+
+class TestFacsGainSweep(unittest.TestCase):
+
+    def setUp(self):
+        self.t_0 = 1e-3
+        self.omega = 2 * np.pi * np.logspace(-2, np.log10(1 / (2 * self.t_0)), 500)
+        self.plant_num = np.array([1.0])
+        self.plant_den = funct_d2(2)
+        self.gains = np.arange(0.05, 0.95, 0.05)
+        self.zeros = np.zeros((2, self.omega.size))
+        # Narrow bump at 0.5 Hz, well below the loop bandwidth
+        f = self.omega / (2 * np.pi)
+        bump = 1e4 * np.exp(-0.5 * ((f - 0.5) / 0.1) ** 2)
+        self.psd_lf = np.vstack([bump, bump])
+
+    def _sweep(self, psd_atmo, psd_vib, sigma2, gains=None):
+        gains = self.gains if gains is None else gains
+        return facs_gain_sweep(gains, self.omega, self.t_0, self.plant_num,
+                               self.plant_den, psd_atmo, psd_vib, sigma2)
+
+    def test_output_shape(self):
+        best, var = self._sweep(self.psd_lf, self.zeros, 100.0)
+        self.assertEqual(var.shape, (self.gains.size, 2))
+        self.assertIn(best, self.gains)
+
+    def test_noise_only_selects_smallest_gain(self):
+        best, var = self._sweep(self.zeros, self.zeros, 100.0)
+        self.assertEqual(best, self.gains[0])
+        np.testing.assert_allclose(var[:, 0], 0.0, atol=1e-12)
+        self.assertTrue(np.all(np.diff(var[:, 1]) > 0))
+
+    def test_low_frequency_disturbance_selects_largest_gain(self):
+        best, var = self._sweep(self.psd_lf, self.zeros, 0.0)
+        self.assertEqual(best, self.gains[-1])
+        self.assertTrue(np.all(np.diff(var[:, 0]) < 0))
+        np.testing.assert_allclose(var[:, 1], 0.0, atol=1e-12)
+
+    def test_matches_direct_computation(self):
+        sigma2 = 50.0
+        psd_vib = 0.1 * self.psd_lf
+        _, var = self._sweep(self.psd_lf, psd_vib, sigma2)
+        k = 7
+        H_r, H_n = build_transfer_function(
+            self.omega, self.t_0, 2, self.plant_num, self.plant_den,
+            gain=np.full(2, self.gains[k]))
+        _, v_t, _, _ = temporal_variance(self.psd_lf, psd_vib, H_r, 2, self.omega)
+        _, v_m, _, _ = facs_measurement_variance(H_n, self.omega, sigma2)
+        np.testing.assert_allclose(var[k], [np.real(v_t), np.real(v_m)], rtol=1e-10)
+
+    def test_linear_in_noise_variance(self):
+        _, var1 = self._sweep(self.psd_lf, self.zeros, 30.0)
+        _, var2 = self._sweep(self.psd_lf, self.zeros, 60.0)
+        np.testing.assert_allclose(var2[:, 1], 2 * var1[:, 1], rtol=1e-10)
+        np.testing.assert_allclose(var2[:, 0], var1[:, 0], rtol=1e-12)
 
 
 if __name__ == "__main__":

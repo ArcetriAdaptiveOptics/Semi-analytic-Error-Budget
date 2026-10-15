@@ -11,7 +11,8 @@ measurement-noise budget for a FACS-based tip/tilt loop (see
 src/facs_functions.py). FACS has no aliasing term (neglected for a
 full-aperture sensor) and no fitting term of its own (fitting only depends
 on the DM/ASM resolution, parameterized here by the number of HO modes the
-pyramid corrects).
+pyramid corrects). The FACS loop gain is chosen by a simple sweep, as for
+the pyramid blocks (minimum variance, no stability-margin constraint).
 
 Run with:
     python Total_Variance_FACS.py
@@ -35,12 +36,17 @@ from src.Functions import (
     compute_optical_gain,
     integrate_modal_psd,
     gain_maximum_from_total_delay,
+    DEFAULT_GAIN_MAX_MARGIN,
     optimize_gain_blocks,
     resolve_gain_mode,
 )
 from src.facs_functions import (
+    CRAD2AS,
+    facs_long_exposure_psf,
+    wcog_weight,
+    wcog_gain_numerical,
     strehl_ratio_marechal,
-    broaden_spot_for_strehl,
+    facs_gain_sweep,
     facs_slope_noise_variance_nm2,
     facs_measurement_variance,
     facs_total_variance,
@@ -164,7 +170,10 @@ gain_mode = resolve_gain_mode(param['control'])
 if gain_mode != 'block_optimization':
     raise ValueError("Total_Variance_FACS.py currently only supports control.gain_mode: block_optimization")
 
-gain_maximum = gain_maximum_from_total_delay(total_delay)
+# Fraction of the stability-limit gain allowed in gain sweeps (1 = up to the limit,
+# default 0.8).
+gain_max_margin = float(param['control'].get('gain_max_margin', DEFAULT_GAIN_MAX_MARGIN))
+gain_maximum = gain_maximum_from_total_delay(total_delay, gain_max_margin)
 gain_ho, gain_sweeps = optimize_gain_blocks(
     gain_min=gain_minimum,
     gain_max=gain_maximum,
@@ -244,7 +253,9 @@ var_fit_ho = fitting_variance(fitting_coeff, n_modes_ho, telescope_diameter, fri
 # TT BRANCH (FACS) — independent 2-mode closed loop.
 # =============================================================================
 
-control_facs = param['control_facs']
+# control_facs is optional (all its keys have defaults); a section holding
+# only comments loads as None.
+control_facs = param.get('control_facs') or {}
 
 # FACS runs on its own detector/RTC chain: own frame rate (hence own Nyquist
 # frequency and temporal grid) and own loop delay in frames. Both default to
@@ -273,15 +284,6 @@ freq_facs, PSD_wind_vib_tt = load_PSD_windshake(param['data']['windshake_psd'],
 if freq_facs is None or PSD_wind_vib_tt is None:
     raise RuntimeError("PSD windshake not loaded on the FACS frequency grid")
 
-gain_facs = np.full(2, float(control_facs['gain_value']))
-H_r_facs, H_n_facs = build_transfer_function(
-    omega_facs, t_0_facs, 2, plant_num, plant_den_facs, gain=gain_facs,
-)
-
-var_temp_tt_OL, var_temp_tt_CL, PSD_out_temp_tt, PSD_in_temp_tt = temporal_variance(
-    PSD_atmosf_tt, PSD_wind_vib_tt[0:2, :], H_r_facs, 2, omega_facs,
-)
-
 # Whole-pupil photons per FACS frame. Computed here rather than with
 # flux_for_frame_for_pixel(n_subaperture=1), which would use a square D^2
 # area (correct per sub-aperture, not for the circular pupil). No central
@@ -289,36 +291,71 @@ var_temp_tt_OL, var_temp_tt_CL, PSD_out_temp_tt, PSD_in_temp_tt = temporal_varia
 facs_flux_total_per_frame = (phot_flux_facs * t_0_facs * np.pi / 4 * telescope_diameter ** 2
                              * 10 ** (-magnitude_facs / 2.5))
 
-# The FACS PSF is not diffraction-limited: it sees the same focal-plane
-# image left by the pyramid's own (imperfect) HO correction. Broaden the
-# spot accordingly, via a Maréchal-approximation Strehl ratio estimated
-# from the HO residual already computed above.
-ho_residual_rms_nm = np.sqrt(var_fit_ho + var_temp_ho + var_meas_ho + var_alias_ho)
+# FACS spot: long-exposure PSF left by the pyramid's HO correction. Residual
+# phase PSD flat inside the AO control radius, with f_cut from the HO mode
+# count (number of Fourier modes in a disk: N_HO = pi * (f_cut * D)^2), and
+# von Karman-shaped outside it, scaled to the HO fitting error.
 wavelength_facs = float(facs['wavelength']) * 1e-9  # wavefront_sensor_facs.wavelength is in [nm]
-strehl_facs = strehl_ratio_marechal(ho_residual_rms_nm, wavelength_facs)
-if strehl_facs < 0.2:
-    print(f"\nWarning: FACS Strehl estimate ({strehl_facs:.2f}) is low; the "
-          "Maréchal/Gaussian-core broadening approximation is only "
-          "qualitative in this regime.")
-n_samp_facs, fwhm_spot_pix_facs = broaden_spot_for_strehl(
-    facs['n_samp'], facs['fwhm_spot_pix'], strehl_facs,
+n_samp_facs = int(facs['n_samp'])
+n_pixels_facs = int(facs['n_pixels'])
+pixel_scale_arcsec_facs = wavelength_facs / (n_samp_facs * telescope_diameter) * CRAD2AS
+f_cut_facs = np.sqrt(n_modes_ho / np.pi) / telescope_diameter
+sigma2_inband_ho = float(np.real(var_temp_ho + var_meas_ho + var_alias_ho))
+
+psf_args = dict(
+    n_pixels=n_pixels_facs, n_samp=n_samp_facs, telescope_diameter=telescope_diameter,
+    wavelength=wavelength_facs, sigma2_inband_nm2=sigma2_inband_ho,
+    sigma2_fit_nm2=float(var_fit_ho), f_cut=f_cut_facs, outer_scale=outer_scale,
 )
+psf_facs = facs_long_exposure_psf(**psf_args)
+weight_facs = wcog_weight(n_pixels_facs, facs['fwhm_weight_pix'])
+
+# WCoG gain calibrated numerically on this PSF (push-pull of +/-0.05 px).
+shift_pix = 0.05
+wcog_gain_facs = wcog_gain_numerical(
+    facs_long_exposure_psf(**psf_args, x0=+shift_pix),
+    facs_long_exposure_psf(**psf_args, x0=-shift_pix),
+    weight_facs, shift_pix,
+)
+core_fraction_facs = strehl_ratio_marechal(np.sqrt(sigma2_inband_ho + var_fit_ho), wavelength_facs)
 
 sigma2_tt_nm2 = facs_slope_noise_variance_nm2(
-    photon_flux_total=facs_flux_total_per_frame,
+    flux_map=facs_flux_total_per_frame * psf_facs,
+    weight_map=weight_facs,
+    gamma=1.0 / wcog_gain_facs,
     ron=facs['noise_readout'],
     sky_bkg=facs['sky_backgr'],
     dark_curr=facs['dark_curr'],
     excess_noise_factor2=float(facs['value_for_F_excess_noise']) ** 2,  # YAML holds F, meanVarPixelThr wants F^2
-    n_pixels=facs['n_pixels'],
-    n_samp=n_samp_facs,
-    fwhm_spot_pix=fwhm_spot_pix_facs,
-    fwhm_weight_pix=facs['fwhm_weight_pix'],
-    pixel_scale_arcsec=facs['pixel_scale_arcsec'],
+    pixel_scale_arcsec=pixel_scale_arcsec_facs,
     telescope_diameter=telescope_diameter,
     threshold=facs['threshold'],
     order=facs['order'],
     npoints=facs['npoints'],
+)
+
+# FACS gain: simple sweep, same policy and range as the pyramid's block
+# optimization (gain_min .. margin * stability-limit gain for this delay,
+# step 0.05, minimum closed-loop variance). The margin defaults to the
+# pyramid's control.gain_max_margin.
+gain_max_margin_facs = float(control_facs.get('gain_max_margin', gain_max_margin))
+gain_values_facs = np.arange(gain_minimum,
+                             gain_maximum_from_total_delay(total_delay_facs, gain_max_margin_facs), 0.05)
+best_gain_facs, sweep_variances_facs = facs_gain_sweep(
+    gain_values_facs, omega_facs, t_0_facs, plant_num, plant_den_facs,
+    PSD_atmosf_tt, PSD_wind_vib_tt[0:2, :], sigma2_tt_nm2,
+)
+if np.isclose(best_gain_facs, gain_values_facs[-1]):
+    print(f"\nNote: best FACS gain ({best_gain_facs:.2f}) is the top of the sweep, i.e. "
+          f"limited by gain_max_margin ({gain_max_margin_facs:.2f} x stability limit).")
+gain_facs = np.full(2, best_gain_facs)
+
+H_r_facs, H_n_facs = build_transfer_function(
+    omega_facs, t_0_facs, 2, plant_num, plant_den_facs, gain=gain_facs,
+)
+
+var_temp_tt_OL, var_temp_tt_CL, PSD_out_temp_tt, PSD_in_temp_tt = temporal_variance(
+    PSD_atmosf_tt, PSD_wind_vib_tt[0:2, :], H_r_facs, 2, omega_facs,
 )
 
 var_meas_tt_OL, var_meas_tt_CL, PSD_out_meas_tt, PSD_in_meas_tt = facs_measurement_variance(
@@ -335,9 +372,11 @@ var_total, var_ho, var_tt = facs_total_variance(
     var_temp_tt_CL, var_meas_tt_CL, verbose=True,
 )
 
-print(f"\nFACS loop: {1.0 / t_0_facs:.0f} Hz, delay {total_delay_facs} frames, gain {gain_facs[0]:.2f}")
+print(f"\nFACS loop: {1.0 / t_0_facs:.0f} Hz, delay {total_delay_facs} frames, "
+      f"gain {gain_facs[0]:.2f} (swept {gain_values_facs[0]:.2f}..{gain_values_facs[-1]:.2f})")
 print(f"FACS tip/tilt measurement-noise variance: {sigma2_tt_nm2:.4f} nm^2 "
       f"({np.sqrt(sigma2_tt_nm2):.4f} nm RMS, open loop, per axis)")
-print(f"FACS Strehl estimate at {wavelength_facs * 1e9:.0f} nm (from HO residual "
-      f"{ho_residual_rms_nm:.1f} nm RMS): {strehl_facs:.3f} "
-      f"(spot FWHM {facs['fwhm_spot_pix']:.2f} -> {fwhm_spot_pix_facs:.2f} pix)")
+print(f"FACS PSF at {wavelength_facs * 1e9:.0f} nm: core fraction {core_fraction_facs:.3f}, "
+      f"flux in {n_pixels_facs}x{n_pixels_facs} window {psf_facs.sum():.3f}, "
+      f"WCoG gain {wcog_gain_facs:.3f}, f_cut {f_cut_facs * telescope_diameter:.1f} lambda/D, "
+      f"pixel {pixel_scale_arcsec_facs * 1e3:.3f} mas")

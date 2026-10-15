@@ -20,8 +20,11 @@ $$\sigma^2_{tot} = \sigma^2_{fit}(N_{HO}) + \sum_{i \in HO}\left(\sigma^2_{temp}
 
 * **HO (pyramid)**: the standard pipeline runs unchanged on all `control.n_modes`; tip and tilt (modes 0-1) are discarded. The fitting error uses $N_{HO}$ = `n_modes` - 2.
 * **TT (FACS)**: independent 2-mode closed loop with its own gain, sampling time and delay (`control_facs`).
-  * Measurement noise: a diffraction-limited sinc² spot, broadened by the Maréchal Strehl of the HO residual at the FACS wavelength.
-  * Per-pixel statistics come from MASTSEL `meanVarPixelThr` and feed the WCoG centroid noise.
+  * FACS spot: the long-exposure PSF left by the pyramid's HO correction, computed with MASTSEL `longExposurePsf`.
+    The residual phase PSD is flat inside the AO control radius $f_c = \sqrt{N_{HO}/\pi}/D$ (HO temporal + measurement + aliasing variance).
+    Outside $f_c$ it has a von Kármán shape, scaled to the HO fitting variance.
+    The PSF is integrated over pixels of λ/(`n_samp`·D) (pixel MTF applied to the OTF); light outside the `n_pixels` window is lost.
+  * Per-pixel statistics come from MASTSEL `meanVarPixelThr`. The WCoG gain is calibrated numerically (push-pull) on that PSF and feeds the WCoG centroid noise.
   * Conversion to WFE uses $\theta[\mathrm{arcsec}] = 4\,a[\mathrm{nm}]\,10^{-9}/D \cdot 206265$.
   * No optical gain (FACS is linear) and no aliasing term (neglected).
 * **Photon budget** (`wavefront_sensor_facs.flux_mode`):
@@ -30,9 +33,12 @@ $$\sigma^2_{tot} = \sigma^2_{fit}(N_{HO}) + \sum_{i \in HO}\left(\sigma^2_{temp}
 * `wavefront_sensor_facs.wavelength` is in **nm**.
 
 Known limitations:
-* The FACS gain is fixed, not optimized.
-* The Maréchal broadening is only qualitative below S ≈ 0.2.
-* FACS aliasing and the halo shape of the partially corrected PSF are neglected.
+* The FACS gain is chosen by a simple sweep, as for the pyramid blocks: minimum variance up to
+  `gain_max_margin` × the integrator stability limit (`control.gain_max_margin`, default 0.8, i.e. a gain
+  margin of at least 1.9 dB; optionally overridden by `control_facs.gain_max_margin`). The optimum usually
+  sits at that upper bound.
+* The in-band residual is assumed spatially flat. If it is concentrated at low spatial frequencies, more halo falls inside the FACS window.
+* FACS aliasing and the frame-to-frame speckle motion of the centroid are neglected (only the long-exposure PSF is used).
 * The FACS flux uses the full circular pupil area, πD²/4, with no central obstruction.
 
 Run with:
