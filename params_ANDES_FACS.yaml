@@ -110,7 +110,8 @@ control:
 # ---------------------------------------------------------------------------
 wavefront_sensor_facs:
   # Excess noise, background, dark current, read-out noise: same convention
-  # as 'wavefront_sensor' above (F^2 multiplies photon+bg+dark shot noise).
+  # as 'wavefront_sensor' above (value_for_F_excess_noise is F, the st. dev.
+  # factor; F^2 multiplies the photon+bg+dark shot-noise variance).
   value_for_F_excess_noise: 1.0
   sky_backgr: 0
   dark_curr: 0
@@ -149,10 +150,13 @@ control_facs:
   # Fixed closed-loop gain for the tip/tilt loop driven by FACS (not
   # auto-optimized in this first iteration; see Total_Variance_FACS.py).
   gain_value: 0.3
-  # Optional: sampling time override for the FACS detector/RTC chain;
-  # defaults to control.sampling_time if absent (i.e. same timing as the
-  # pyramid loop is assumed unless overridden here).
-  # sampling_time: 0.002
+  # Optional: FACS detector/RTC timing. Each defaults to the pyramid value
+  # (control.sampling_time, plant.total_delay) if absent, except that
+  # total_delay becomes mandatory when sampling_time differs from the
+  # pyramid's. A different sampling time also changes the FACS Nyquist
+  # frequency, temporal grid, and photons per frame.
+  # sampling_time: 0.002   # [s]
+  # total_delay: 3         # WFS + RTC + DM, in FACS frames
 
 display:
   # Enable/disable all visualization blocks

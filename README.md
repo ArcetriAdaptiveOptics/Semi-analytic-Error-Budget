@@ -12,8 +12,38 @@ This code computes the total residual variance of an Adaptive Optics (AO) system
 
 The project has been modularized to separate core mathematical functions, visualization tools, and execution scripts, and it is fully configurable via YAML files.
 
+## Hybrid budget: pyramid HO + full-aperture tip/tilt sensor (FACS)
+
+`Total_Variance_FACS.py` computes the error budget of a system in which the pyramid corrects the higher-order (HO) modes and a **Full-Aperture Centroid Sensor** (FACS: a 1x1 Shack-Hartmann, i.e. a weighted center of gravity, WCoG, of the whole-pupil PSF) senses tip/tilt:
+
+$$\sigma^2_{tot} = \sigma^2_{fit}(N_{HO}) + \sum_{i \in HO}\left(\sigma^2_{temp} + \sigma^2_{meas} + \sigma^2_{alias}\right)_{pyr} + \sigma^2_{temp,TT} + \sigma^2_{meas,TT}$$
+
+* **HO (pyramid)**: the standard pipeline runs unchanged on all `control.n_modes`; tip and tilt (modes 0-1) are discarded. The fitting error uses $N_{HO}$ = `n_modes` - 2.
+* **TT (FACS)**: independent 2-mode closed loop with its own gain, sampling time and delay (`control_facs`).
+  * Measurement noise: a diffraction-limited sinc² spot, broadened by the Maréchal Strehl of the HO residual at the FACS wavelength.
+  * Per-pixel statistics come from MASTSEL `meanVarPixelThr` and feed the WCoG centroid noise.
+  * Conversion to WFE uses $\theta[\mathrm{arcsec}] = 4\,a[\mathrm{nm}]\,10^{-9}/D \cdot 206265$.
+  * No optical gain (FACS is linear) and no aliasing term (neglected).
+* **Photon budget** (`wavefront_sensor_facs.flux_mode`):
+  * `shared`: same band, beamsplitter. FACS gets a fraction `flux_split` and the pyramid keeps the rest.
+  * `independent`: different band, dichroic. FACS photometry is set in `guide_star_facs`.
+* `wavefront_sensor_facs.wavelength` is in **nm**.
+
+Known limitations:
+* The FACS gain is fixed, not optimized.
+* The Maréchal broadening is only qualitative below S ≈ 0.2.
+* FACS aliasing and the halo shape of the partially corrected PSF are neglected.
+* The FACS flux uses the full circular pupil area, πD²/4, with no central obstruction.
+
+Run with:
+```bash
+python Total_Variance_FACS.py   # reads params_ANDES_FACS.yaml
+```
+Core functions live in `src/facs_functions.py`; tests in `tests/test_facs_functions.py`.
+
 ## Project Structure
 
+* **`src/facs_functions.py`**: Full-Aperture Centroid Sensor (FACS) tip/tilt functions: spot/weighting model, MASTSEL-based pixel noise, WCoG centroid noise, unit conversion, HO+TT total.
 * **`src/Functions.py`**: The core library containing all mathematical and physical definitions (transfer functions, PSD calculations, optical gain interpolation, variance integrations, etc.).
 * **`src/plots.py`**: Visualization library containing functions to generate PSD plots, transfer function plots, and closed-loop summary displays.
 * **`src/fits_file`**: Directory with data files.
@@ -21,6 +51,7 @@ The project has been modularized to separate core mathematical functions, visual
 * **`examples/verify_aliasing_energy.py`**: A validation script that checks the aliasing energy conservation by comparing the variance calculated from slopes vs. the numerical integral of the SA PSD.
 * **`scripts/main_saeb.py`**: Command-line entrypoint to run the error budget simulation with a YAML file.
 * **`Total_variance.py`**: A script designed to run the error budget simulation.
+* **`Total_Variance_FACS.py`** / **`params_ANDES_FACS.yaml`**: Hybrid budget, pyramid for HO modes + FACS for tip/tilt (see above).
 
 ### Configuration Files
 
@@ -37,6 +68,7 @@ The code relies on several standard scientific Python libraries. Ensure you have
 * `pyyaml` (for parsing `.yaml` configurations)
 * `sympy` (for symbolic transfer function derivations)
 * `arte` (for atmospheric and turbulence PSD generation)
+* `mastsel` (per-pixel noise statistics for the FACS tip/tilt sensor)
 
 ## How to Run
 

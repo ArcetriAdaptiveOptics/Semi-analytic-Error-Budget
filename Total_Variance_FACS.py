@@ -37,7 +37,6 @@ from src.Functions import (
     gain_maximum_from_total_delay,
     optimize_gain_blocks,
     resolve_gain_mode,
-    flux_for_frame_for_pixel,
 )
 from src.facs_functions import (
     strehl_ratio_marechal,
@@ -247,26 +246,48 @@ var_fit_ho = fitting_variance(fitting_coeff, n_modes_ho, telescope_diameter, fri
 
 control_facs = param['control_facs']
 
-t_0_facs = control_facs.get('sampling_time', t_0)
-if t_0_facs != t_0:
-    plant_den_facs = np.polymul(plant_den_base, funct_d2(total_delay))
+# FACS runs on its own detector/RTC chain: own frame rate (hence own Nyquist
+# frequency and temporal grid) and own loop delay in frames. Both default to
+# the pyramid values; but a delay in frames only carries over if the frame
+# rate is the same, so a different sampling time requires an explicit delay.
+t_0_facs = float(control_facs.get('sampling_time', t_0))
+if 'total_delay' in control_facs:
+    total_delay_facs = int(control_facs['total_delay'])
+elif np.isclose(t_0_facs, t_0):
+    total_delay_facs = total_delay
 else:
-    plant_den_facs = plant_den
+    raise ValueError("control_facs.total_delay is required when control_facs.sampling_time "
+                     "differs from control.sampling_time")
+plant_den_facs = np.polymul(plant_den_base, funct_d2(total_delay_facs))
+
+temporal_freqs_facs = np.logspace(temporal_freqs_minimum, np.log10(1.0 / (2.0 * t_0_facs)),
+                                  temporal_freqs_number)
+omega_facs = 2 * np.pi * temporal_freqs_facs
+
+# Tip/tilt input PSDs re-evaluated on the FACS grid (2 modes only, cheap).
+PSD_atmosf_tt = turbulence_psd(rho, theta, aperture_radius, aperture_center, fried_param, outer_scale,
+                               layers_altitude, wind_speed, wind_direction, spatial_freqs,
+                               temporal_freqs_facs, n_modes=2)
+freq_facs, PSD_wind_vib_tt = load_PSD_windshake(param['data']['windshake_psd'],
+                                                target_frequencies=temporal_freqs_facs)
+if freq_facs is None or PSD_wind_vib_tt is None:
+    raise RuntimeError("PSD windshake not loaded on the FACS frequency grid")
 
 gain_facs = np.full(2, float(control_facs['gain_value']))
 H_r_facs, H_n_facs = build_transfer_function(
-    omega_temporal_freqs, t_0_facs, 2, plant_num, plant_den_facs, gain=gain_facs,
+    omega_facs, t_0_facs, 2, plant_num, plant_den_facs, gain=gain_facs,
 )
 
 var_temp_tt_OL, var_temp_tt_CL, PSD_out_temp_tt, PSD_in_temp_tt = temporal_variance(
-    PSD_atmosf[0:2, :], PSD_wind_vib[0:2, :], H_r_facs, 2, omega_temporal_freqs,
+    PSD_atmosf_tt, PSD_wind_vib_tt[0:2, :], H_r_facs, 2, omega_facs,
 )
 
-flux_components = flux_for_frame_for_pixel(
-    phot_flux_facs, telescope_diameter, 1.0 / t_0_facs, magnitude_facs,
-    n_subaperture=1, return_components=True,
-)
-facs_flux_total_per_frame = flux_components['flux_total_per_frame']
+# Whole-pupil photons per FACS frame. Computed here rather than with
+# flux_for_frame_for_pixel(n_subaperture=1), which would use a square D^2
+# area (correct per sub-aperture, not for the circular pupil). No central
+# obstruction.
+facs_flux_total_per_frame = (phot_flux_facs * t_0_facs * np.pi / 4 * telescope_diameter ** 2
+                             * 10 ** (-magnitude_facs / 2.5))
 
 # The FACS PSF is not diffraction-limited: it sees the same focal-plane
 # image left by the pyramid's own (imperfect) HO correction. Broaden the
@@ -288,7 +309,7 @@ sigma2_tt_nm2 = facs_slope_noise_variance_nm2(
     ron=facs['noise_readout'],
     sky_bkg=facs['sky_backgr'],
     dark_curr=facs['dark_curr'],
-    excess_noise_factor2=facs['value_for_F_excess_noise'],
+    excess_noise_factor2=float(facs['value_for_F_excess_noise']) ** 2,  # YAML holds F, meanVarPixelThr wants F^2
     n_pixels=facs['n_pixels'],
     n_samp=n_samp_facs,
     fwhm_spot_pix=fwhm_spot_pix_facs,
@@ -301,7 +322,7 @@ sigma2_tt_nm2 = facs_slope_noise_variance_nm2(
 )
 
 var_meas_tt_OL, var_meas_tt_CL, PSD_out_meas_tt, PSD_in_meas_tt = facs_measurement_variance(
-    H_n_facs, omega_temporal_freqs, sigma2_tt_nm2,
+    H_n_facs, omega_facs, sigma2_tt_nm2,
 )
 
 # =============================================================================
@@ -314,7 +335,8 @@ var_total, var_ho, var_tt = facs_total_variance(
     var_temp_tt_CL, var_meas_tt_CL, verbose=True,
 )
 
-print(f"\nFACS tip/tilt measurement-noise variance: {sigma2_tt_nm2:.4f} nm^2 "
+print(f"\nFACS loop: {1.0 / t_0_facs:.0f} Hz, delay {total_delay_facs} frames, gain {gain_facs[0]:.2f}")
+print(f"FACS tip/tilt measurement-noise variance: {sigma2_tt_nm2:.4f} nm^2 "
       f"({np.sqrt(sigma2_tt_nm2):.4f} nm RMS, open loop, per axis)")
 print(f"FACS Strehl estimate at {wavelength_facs * 1e9:.0f} nm (from HO residual "
       f"{ho_residual_rms_nm:.1f} nm RMS): {strehl_facs:.3f} "

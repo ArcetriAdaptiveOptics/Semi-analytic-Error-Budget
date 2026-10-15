@@ -192,8 +192,8 @@ def broaden_spot_for_strehl(n_samp: float, fwhm_spot_pix: float,
 
 # Per-pixel mean/variance including photon, read-out, background and excess
 # noise: thin wrapper around MASTSEL's meanVarPixelThr (Sec. 2.2.2 FACS
-# draft). ``excess_noise_factor2`` is F^2, the same convention already used
-# by wavefront_sensor.value_for_F_excess_noise in this project's YAML files.
+# draft). ``excess_noise_factor2`` is F^2 (meanVarPixelThr convention), while
+# value_for_F_excess_noise in this project's YAML files is F: square it first.
 
 def facs_pixel_noise_variance(flux_map: np.ndarray, ron: float,
                               sky_bkg: float = 0.0, dark_curr: float = 0.0,
