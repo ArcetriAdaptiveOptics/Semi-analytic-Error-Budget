@@ -646,6 +646,28 @@ class TestAliasingDefaultsAndOpticalGain(unittest.TestCase):
 # Tests that require files already present in the repository
 # ---------------------------------------------------------------------------
 
+class TestOpticalGainModulationAxisFromFiles(unittest.TestCase):
+    """Modulation radii are inferred from the file names (_mod0 / _mod3)."""
+
+    def test_soul_mod3_at_grid_node_returns_mod3_table(self):
+        from astropy.io import fits
+
+        file_mod0 = os.path.join(REPO_ROOT, "src/file_fits/LBT/SOUL_og_mod0_bn2.fits")
+        file_mod3 = os.path.join(REPO_ROOT, "src/file_fits/LBT/SOUL_og_mod3_bn2.fits")
+        with fits.open(file_mod3) as hdul:
+            gain_mod3 = hdul[0].data
+            seeing_vals = hdul[1].data
+
+        # At modulation 3 and a seeing grid node the interpolation must
+        # return the mod3 table itself, with no contribution from mod0.
+        result = compute_optical_gain(
+            file_mod0, file_mod3,
+            seeing=float(seeing_vals[2]), modulation_radius=3.0,
+            actuators_number=gain_mod3.shape[1],
+        )
+        np.testing.assert_allclose(result[:, 0], gain_mod3[2], rtol=1e-6)
+
+
 class TestLoadParameters(unittest.TestCase):
     """load_parameters reads the YAML configuration file."""
 
