@@ -827,6 +827,79 @@ def compute_optical_gain(file_mod0, file_mod1,
 
     return _format_modal_optical_gain(interpolated_gain, actuators_number)
 
+
+def optical_gain_mode_scaling(binning_configs, current_bin, n_modes, seeing,
+                              modulation_radius):
+    """
+    Scalar k(seeing, n) that rescales the optical gains when fewer modes are
+    corrected than in the OG table of the current binning:
+    OG_i(seeing, n) = k(seeing, n) * OG_i(seeing).
+
+    Fewer corrected modes leave a larger residual, which lowers the optical
+    gains. The other binning configurations provide OG tables computed with
+    fewer corrected modes; at each of them (node n_b < n_ref)
+
+        k(seeing, n_b) = mean_i [ OG_i,b(seeing) / OG_i,ref(seeing) ],
+
+    averaged over the modes common to all nodes, and k(seeing, n_ref) = 1.
+    Between nodes k is linear in n; below the smallest node it is constant.
+    Seeing is clamped to the table range. Note: the coarser binnings also
+    differ in WFS sampling, which the ratio includes.
+
+    Parameters
+    ----------
+    binning_configs : dict
+        ``binning_configs`` section of the YAML (each entry with
+        ``optical_gain_models``).
+    current_bin : int
+        Binning of the run (``control.bin``).
+    n_modes : int
+        Number of corrected modes of the run.
+    seeing : float
+        Seeing [arcsec].
+    modulation_radius : float
+        Pyramid modulation radius [lambda/D].
+
+    Returns
+    -------
+    float
+        k in (0, 1]; 1 when ``n_modes`` is not lower than the OG table size.
+    """
+    def table(cfg):
+        file_low, file_high = cfg['optical_gain_models']
+        grid, seeing_vals, _ = _load_optical_gain_grid(file_low, file_high)
+        return file_low, file_high, grid.shape[-1], seeing_vals
+
+    ref_cfg = binning_configs.get(current_bin, binning_configs.get(str(current_bin)))
+    ref_low, ref_high, n_ref, seeing_vals = table(ref_cfg)
+
+    if n_modes >= n_ref:
+        return 1.0
+
+    seeing_c = float(np.clip(seeing, np.min(seeing_vals), np.max(seeing_vals)))
+    og_ref = compute_optical_gain(ref_low, ref_high, seeing_c, modulation_radius,
+                                  actuators_number=n_ref)[:, 0]
+
+    nodes = []
+    for cfg in binning_configs.values():
+        file_low, file_high, n_b, _ = table(cfg)
+        if n_b < n_ref:
+            og_b = compute_optical_gain(file_low, file_high, seeing_c, modulation_radius,
+                                        actuators_number=n_b)[:, 0]
+            nodes.append((n_b, og_b))
+
+    if not nodes:
+        print(f"WARNING: no OG table with fewer than {n_ref} modes, "
+              "optical gains not rescaled for the corrected modes.")
+        return 1.0
+
+    n_common = min(n_b for n_b, _ in nodes)
+    nodes.sort(key=lambda node: node[0])
+    n_nodes = [n_b for n_b, _ in nodes] + [n_ref]
+    k_nodes = [float(np.mean(og_b[:n_common] / og_ref[:n_common])) for _, og_b in nodes] + [1.0]
+
+    return float(np.interp(n_modes, n_nodes, k_nodes))
+
 # =============================================================================
 # COMPARISON FOR OPTG SOUL (another way to calculate optg for the SOUL case)
 # =============================================================================
