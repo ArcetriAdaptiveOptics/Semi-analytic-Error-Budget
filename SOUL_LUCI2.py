@@ -24,6 +24,7 @@ pd.set_option("display.max_colwidth", None)
 
 analysis_mode = "all"
 use_ao_seeing = True
+force_bin1 = False
 TT_REFERENCE_WAVELENGTH_NM = 1650.0
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results" / "LBT"
@@ -281,6 +282,9 @@ if "SR_SLOPES_TTFREE" in table.dtype.names:
 
 df = pd.DataFrame(df_columns)
 
+if force_bin1:
+    df["BINNING"] = 1
+
 # print("\nAO_SEEING values:")
 # print(df["AO_SEEING"].describe())
 
@@ -382,24 +386,15 @@ elif analysis_mode == "all":
 
     grouped = df.groupby(["STAR_ID", "BINNING", "AO_FRAMERATE"])
     
-    groups_list = list(grouped)
-    
     print("\nNumber of groups:")
-    print(len(groups_list))
-    
-    
+    print(len(grouped))
+
     summary = []
     
-    for group in groups_list:
-    
+    for (star_id, binning, ao_framerate), group_df in grouped:
+
         print("\n" + "=" * 80)
     
-        group_name = group[0]
-        group_df = group[1]
-    
-        star_id = group_name[0]
-        binning = group_name[1]
-        ao_framerate = group_name[2]
         tn_case = group_df["TN"].iloc[0]
 
         if use_ao_seeing: 

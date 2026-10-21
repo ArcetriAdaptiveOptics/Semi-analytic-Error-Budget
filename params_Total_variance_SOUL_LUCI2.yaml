@@ -18,7 +18,7 @@ wavefront_sensor:
   # Dark current in [photo-electrons]
   dark_curr: 0
   # Readout noise in [photo-electrons]
-  noise_readout: 0.2
+  noise_readout: 0.4
   # Number of sub apertures on the diameter of the telescope
   number_of_sub: 0 # NOTE: defined in binning_configs
   # Modulation radius [lambda/D]
