@@ -22,6 +22,7 @@ from src.Functions import seeing_to_r0
 from src.Functions import aliasing_variance
 from src.Functions import build_transfer_function
 from src.Functions import compute_optical_gain
+from src.Functions import optical_gain_mode_scaling
 from src.Functions import final_soul_optical_gain
 from src.Functions import fitting_variance
 from src.Functions import funct_d2
@@ -213,6 +214,14 @@ def run(yaml_file, return_std=False):
             modulation_radius,
             actuators_number=n_actuators,
         )
+        if 'binning_configs' in param:
+            k_modes = optical_gain_mode_scaling(
+                param['binning_configs'], control['bin'], n_actuators,
+                seeing_, modulation_radius,
+            )
+            if k_modes != 1.0:
+                print(f"Optical gains scaled by k = {k_modes:.3f} for {n_actuators} corrected modes.")
+                c_optg = c_optg * k_modes
 
     plant_den = np.polymul(plant_den_base, funct_d2(total_delay))
 

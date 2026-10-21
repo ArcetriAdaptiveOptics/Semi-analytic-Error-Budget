@@ -35,6 +35,7 @@ from src.Functions import (
     load_parameters,
     load_PSD_windshake,
     omega_0,
+    optical_gain_mode_scaling,
     PSD_final_alias,
     read_sigma_slopes,
     resize_psd_like,
@@ -666,6 +667,68 @@ class TestOpticalGainModulationAxisFromFiles(unittest.TestCase):
             actuators_number=gain_mod3.shape[1],
         )
         np.testing.assert_allclose(result[:, 0], gain_mod3[2], rtol=1e-6)
+
+
+class TestOpticalGainModeScaling(unittest.TestCase):
+    """k(seeing, n) rescaling of the OGs when fewer modes than the table are corrected."""
+
+    def setUp(self):
+        # OG paths in the YAML are relative to the repository root.
+        self._cwd = os.getcwd()
+        os.chdir(REPO_ROOT)
+        self.addCleanup(os.chdir, self._cwd)
+        params = load_parameters(
+            os.path.join(REPO_ROOT, "params_Total_variance_SOUL_LUCI2.yaml"))
+        self.cfgs = params["binning_configs"]
+
+    def k(self, n, seeing=0.8, cur=1, cfgs=None):
+        return optical_gain_mode_scaling(
+            self.cfgs if cfgs is None else cfgs, cur, n, seeing, 3.0)
+
+    def test_full_table_returns_one(self):
+        self.assertEqual(self.k(630), 1.0)
+        self.assertEqual(self.k(700), 1.0)
+
+    def test_at_node_matches_independent_fits_ratio(self):
+        from astropy.io import fits
+
+        base = os.path.join(REPO_ROOT, "src/file_fits/LBT")
+        with fits.open(os.path.join(base, "SOUL_og_mod3_ext630.fits")) as h:
+            og1 = np.asarray(h[0].data)[2]   # row 2 = seeing 0.8"
+            self.assertAlmostEqual(float(h[1].data[2]), 0.8)
+        with fits.open(os.path.join(base, "SOUL_og_mod3_bn2.fits")) as h:
+            og2 = np.asarray(h[0].data)[2]
+            self.assertAlmostEqual(float(h[1].data[2]), 0.8)
+        # Common modes across nodes = smallest table (bin4, 54 modes).
+        expected = np.mean(og2[:54] / og1[:54])
+        self.assertAlmostEqual(self.k(209, 0.8), expected, delta=1e-6 * expected)
+
+    def test_linear_between_nodes(self):
+        mid = self.k(419.5)
+        self.assertAlmostEqual(mid, 0.5 * (self.k(209) + 1.0), places=10)
+
+    def test_monotonic_and_in_unit_interval(self):
+        ns = [30, 54, 70, 90, 150, 209, 400, 630]
+        for seeing in (0.6, 1.0):
+            ks = [self.k(n, seeing) for n in ns]
+            self.assertTrue(all(0.0 < v <= 1.0 for v in ks), ks)
+            self.assertTrue(all(b >= a for a, b in zip(ks, ks[1:])), ks)
+
+    def test_constant_below_smallest_node(self):
+        self.assertAlmostEqual(self.k(30), self.k(54), places=12)
+
+    def test_seeing_clamped_to_table_range(self):
+        self.assertAlmostEqual(self.k(209, 2.0), self.k(209, 1.4), places=12)
+        self.assertAlmostEqual(self.k(209, 0.2), self.k(209, 0.4), places=12)
+
+    def test_k_decreases_with_seeing(self):
+        k06, k10, k14 = (self.k(209, s) for s in (0.6, 1.0, 1.4))
+        self.assertGreater(k06, k10)
+        self.assertGreater(k10, k14)
+
+    def test_no_smaller_tables_returns_one(self):
+        only1 = {1: self.cfgs[1]}
+        self.assertEqual(self.k(300, cfgs=only1), 1.0)
 
 
 class TestLoadParameters(unittest.TestCase):
