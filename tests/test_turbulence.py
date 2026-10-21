@@ -100,9 +100,11 @@ class TestTurbulenceVariance(unittest.TestCase):
             space_freqs=_FREQS_1oM, tempor_freqs=_FREQS_HZ, n_modes=3
         )
 
-        cls.var_tip_sa_nm2   = np.real(integrate.simpson(cls.psd_atmo_sa[0, :], _FREQS_HZ))
-        cls.var_tilt_sa_nm2  = np.real(integrate.simpson(cls.psd_atmo_sa[1, :], _FREQS_HZ))
-        cls.var_focus_sa_nm2 = np.real(integrate.simpson(cls.psd_atmo_sa[2, :], _FREQS_HZ))
+        # turbulence_psd returns a PSD per rad/s: integrate over omega = 2*pi*f.
+        omega = 2.0 * np.pi * _FREQS_HZ
+        cls.var_tip_sa_nm2   = np.real(integrate.simpson(cls.psd_atmo_sa[0, :], omega))
+        cls.var_tilt_sa_nm2  = np.real(integrate.simpson(cls.psd_atmo_sa[1, :], omega))
+        cls.var_focus_sa_nm2 = np.real(integrate.simpson(cls.psd_atmo_sa[2, :], omega))
 
     def test_tip_tilt_variance_comparison(self):
         """
