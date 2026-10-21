@@ -402,7 +402,8 @@ def build_transfer_function_single_mode(omega_temp_freq_interval, t_0,
     
 
 # Function to obtain the atmospheric PSD for n_modes Zernike modes starting from tip (j=2).
-# Returns a 2D array of shape (n_modes, len(tempor_freqs)).
+# Returns a 2D array of shape (n_modes, len(tempor_freqs)), in nm^2/(rad/s), sampled at
+# tempor_freqs [Hz]: integrate over omega = 2*pi*f, as all the other PSDs of the budget.
 # Note: n_modes is a mandatory argument to prevent silent under-calculation bugs.
 
 def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_altitude,
@@ -443,6 +444,10 @@ def turbulence_psd(rho, theta, aperture_radius, aperture_center, r0, L0, layers_
     wvl_ref = 500e-9  
     rad2_to_nm2 = (wvl_ref * 1e9 / (2 * np.pi))**2
     PSD_atmo *= rad2_to_nm2
+
+    # arte returns a PSD per Hz (its integral over f is the variance); the budget
+    # integrates over omega, so convert to a PSD per rad/s.
+    PSD_atmo /= 2 * np.pi
 
     return PSD_atmo
 

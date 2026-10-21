@@ -761,6 +761,37 @@ class TestTurbulencePSD(unittest.TestCase):
                 15.0, 0.0, np.array([1.0]), np.array([1.0])
             )
 
+    def test_integral_over_omega_matches_tilt_spatial_variance(self):
+        """The PSD integrated over omega must give the spatial tilt variance.
+
+        Expected value: arte von Karman spatial covariance of Z2 (r0=0.15 m,
+        L0=25 m, D=8.222 m), independent of the temporal model.
+        """
+        from arte.atmo.von_karman_covariance_calculator import \
+            VonKarmanSpatioTemporalCovariance
+        from arte.atmo.cn2_profile import Cn2Profile
+        from arte.types.guide_source import GuideSource
+        from arte.types.aperture import CircularOpticalAperture
+
+        r0, L0, D, v = 0.15, 25.0, 8.222, 10.0
+        space_freqs = np.logspace(-4, 4, 100)
+        freqs_hz = np.logspace(-3, np.log10(500.0), 1000)
+        psd = turbulence_psd(0.0, 0.0, D / 2, [0.0, 0.0, 0.0], r0, L0, 0.0,
+                             v, 0.0, space_freqs, freqs_hz, n_modes=1)
+        var_nm2 = scipy_integrate.simpson(psd[0], x=2 * np.pi * freqs_hz)
+
+        vk = VonKarmanSpatioTemporalCovariance(
+            source1=GuideSource((0, 0), np.inf), source2=GuideSource((0, 0), np.inf),
+            aperture1=CircularOpticalAperture(D / 2, [0, 0, 0]),
+            aperture2=CircularOpticalAperture(D / 2, [0, 0, 0]),
+            cn2_profile=Cn2Profile.from_r0s([r0], [L0], [0.0], [v], [0.0]),
+            spat_freqs=space_freqs)
+        cov = np.real(np.squeeze(vk.getZernikeCovariance(2, 2)))
+        cov_rad2 = float(getattr(cov, 'value', cov))
+        expected_nm2 = cov_rad2 * (500.0 / (2 * np.pi)) ** 2
+
+        np.testing.assert_allclose(var_nm2, expected_nm2, rtol=0.02)
+
 
 # ---------------------------------------------------------------------------
 # find_best_gain
