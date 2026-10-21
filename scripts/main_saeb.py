@@ -212,7 +212,6 @@ def run(yaml_file, return_std=False):
             seeing_,
             modulation_radius,
             actuators_number=n_actuators,
-            modulation_radii=(0.0, 4.0),
         )
 
     plant_den = np.polymul(plant_den_base, funct_d2(total_delay))
