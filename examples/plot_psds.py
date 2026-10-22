@@ -21,11 +21,13 @@ from src.Functions import (
 
 
 def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
-                     gain_value=None, n_modes=None):
+                     gain_value=None, n_modes=None, disable_aliasing=False,
+                     plot_transfer_functions=True):
     print(f"\nGenerating PSD plot for Mode {mode_index}...")
 
     # 1. Load parameters
-    param = load_parameters('params_ANDES.yaml')
+    #param = load_parameters('params_ANDES.yaml')
+    param = load_parameters('params_SOUL.yaml')
 
     if n_modes is not None:
         n_actuators = n_modes
@@ -116,8 +118,9 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
         PSD_atmosf, PSD_vibration_zeros, H_r, n_actuators, omega
     )
 
-    _, _, PSD_out_alias, PSD_in_alias = aliasing_variance(
-        transf_funct=H_n,
+    if not disable_aliasing:
+        _, _, PSD_out_alias, PSD_in_alias = aliasing_variance(
+            transf_funct=H_n,
         actuators_number=n_actuators,
         omega_temp_freq_interval=omega,
         c_optg=c_optg,
@@ -129,7 +132,7 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
         maximum_radial_order_corrected=maximum_radial_order,
         file_path_matrix_R=file_path_R1,
         file_path_sigma_slopes=sigma_slopes_path
-    )
+        )
 
     _, _, PSD_out_meas, PSD_in_meas = measure_variance(
         F_excess=F_excess_noise,
@@ -153,26 +156,26 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
         raise ValueError(f"mode_index must be between 0 and {n_actuators - 1}")
 
     PSD_in_temp = np.real(PSD_in_temp)
-    PSD_in_alias = np.real(PSD_in_alias)
+    PSD_in_alias = np.real(PSD_in_alias) if not disable_aliasing else 0
     PSD_in_meas = np.real(PSD_in_meas)
     PSD_out_temp = np.real(PSD_out_temp)
-    PSD_out_alias = np.real(PSD_out_alias)
+    PSD_out_alias = np.real(PSD_out_alias) if not disable_aliasing else 0
     PSD_out_meas = np.real(PSD_out_meas)
 
     # Variance calculation
     var_temp_in = integrate.simpson(PSD_in_temp[mode_index, :], temporal_freqs)
-    var_alias_in = integrate.simpson(PSD_in_alias[mode_index, :], temporal_freqs)
+    var_alias_in = integrate.simpson(PSD_in_alias[mode_index, :], temporal_freqs) if not disable_aliasing else 0
     var_meas_in = integrate.simpson(PSD_in_meas[mode_index, :], temporal_freqs)
     var_temp_out = integrate.simpson(PSD_out_temp[mode_index, :], temporal_freqs)
-    var_alias_out = integrate.simpson(PSD_out_alias[mode_index, :], temporal_freqs)
+    var_alias_out = integrate.simpson(PSD_out_alias[mode_index, :], temporal_freqs) if not disable_aliasing else 0
     var_meas_out = integrate.simpson(PSD_out_meas[mode_index, :], temporal_freqs)
 
     # Print RMS (square root of variance) for debug
     print(f"Turbulence RMS (Input):    {np.sqrt(var_temp_in):.2e} nm")
-    print(f"Aliasing RMS (Input):      {np.sqrt(var_alias_in):.2e} nm")
+    print(f"Aliasing RMS (Input):      {np.sqrt(var_alias_in):.2e} nm") if not disable_aliasing else None
     print(f"Noise RMS (Input):         {np.sqrt(var_meas_in):.2e} nm")
     print(f"Turbulence RMS (Output):   {np.sqrt(var_temp_out):.2e} nm")
-    print(f"Aliasing RMS (Output):     {np.sqrt(var_alias_out):.2e} nm")
+    print(f"Aliasing RMS (Output):     {np.sqrt(var_alias_out):.2e} nm") if not disable_aliasing else None
     print(f"Noise RMS (Output):        {np.sqrt(var_meas_out):.2e} nm")
 
     # 6. Create Plot
@@ -182,25 +185,28 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
     if plot_inputs:
         plt.loglog(freqs, PSD_in_temp[mode_index, :], label='Turbulence (Open Loop)',
                    color='tab:blue', linestyle='--', alpha=0.6)
-        plt.loglog(freqs, PSD_in_alias[mode_index, :], label='Aliasing (Open Loop)',
-                   color='tab:orange', linestyle='--', alpha=0.6)
+        if not disable_aliasing:
+            plt.loglog(freqs, PSD_in_alias[mode_index, :], label='Aliasing (Open Loop)',
+                       color='tab:orange', linestyle='--', alpha=0.6)
         plt.loglog(freqs, PSD_in_meas[mode_index, :], label='Noise (Open Loop)',
                    color='tab:green', linestyle='--', alpha=0.6)
 
     plt.loglog(freqs, PSD_out_temp[mode_index, :], label='Turbulence Residual (Servo-lag)',
                color='tab:blue', linewidth=2.5)
-    plt.loglog(freqs, PSD_out_alias[mode_index, :], label='Aliasing Residual',
-               color='tab:orange', linewidth=2.5)
+    if not disable_aliasing:
+        plt.loglog(freqs, PSD_out_alias[mode_index, :], label='Aliasing Residual',
+                   color='tab:orange', linewidth=2.5)
     plt.loglog(freqs, PSD_out_meas[mode_index, :], label='Noise Residual',
                color='tab:green', linewidth=2.5)
 
     psd_total = (PSD_out_temp[mode_index, :] +
-                 PSD_out_alias[mode_index, :] +
+                 (PSD_out_alias[mode_index, :] if not disable_aliasing else 0) +
                  PSD_out_meas[mode_index, :])
 
     plt.loglog(freqs, psd_total, label='Total PSD (Sum)',
                color='black', linewidth=3, linestyle='-.')
 
+    plt.xlim(0.1, freqs[-1])
     plt.title(f"Spectral Analysis (PSD) in Closed Loop - Zernike Mode {mode_index}"
               f"\nLoop Gain = {gain_array[0]:.2f}", fontsize=14)
     plt.xlabel("Temporal Frequency [Hz]", fontsize=12)
@@ -210,23 +216,43 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
 
     plt.tight_layout()
 
+    # 7. Transfer function magnitudes (same quantity that multiplies the input PSDs)
+    if plot_transfer_functions:
+        plt.figure(figsize=(12, 7))
+        plt.loglog(freqs, np.abs(H_r[mode_index, :]) ** 2,
+                   label='|H_r|² (rejection)', color='tab:blue', linewidth=2.5)
+        plt.loglog(freqs, np.abs(H_n[mode_index, :]) ** 2,
+                   label='|H_n|² (noise)', color='tab:green', linewidth=2.5)
+        plt.axhline(1.0, color='gray', linestyle=':', linewidth=1)
+        plt.xlim(0.1, freqs[-1])
+        plt.ylim(1e-7, 1e2)
+        plt.title(f"Closed-Loop Transfer Functions - Zernike Mode {mode_index}"
+                  f"\nLoop Gain = {gain_array[mode_index]:.2f}", fontsize=14)
+        plt.xlabel("Temporal Frequency [Hz]", fontsize=12)
+        plt.ylabel("Squared Magnitude", fontsize=12)
+        plt.grid(True, which="both", linestyle=":", alpha=0.7)
+        plt.legend(loc='lower right', fontsize=11)
+        plt.tight_layout()
+
     if show_plot:
         plt.show()
     else:
-        plt.close()
+        plt.close('all')
 
     return {
         "mode_index": int(mode_index),
         "frequencies": freqs,
         "psd_total": psd_total,
         "var_temp_in": float(var_temp_in),
-        "var_alias_in": float(var_alias_in),
+        "var_alias_in": float(var_alias_in) if not disable_aliasing else 0,
         "var_meas_in": float(var_meas_in),
         "var_temp_out": float(var_temp_out),
-        "var_alias_out": float(var_alias_out),
+        "var_alias_out": float(var_alias_out) if not disable_aliasing else 0,
         "var_meas_out": float(var_meas_out),
     }
 
 
 if __name__ == "__main__":
-    plot_system_psds(mode_index=0, plot_inputs=True, gain_value=0.2, n_modes=10)
+    plot_system_psds(mode_index=0, plot_inputs=True, gain_value=0.2,
+                     n_modes=10, disable_aliasing=False,
+                     plot_transfer_functions=False)
