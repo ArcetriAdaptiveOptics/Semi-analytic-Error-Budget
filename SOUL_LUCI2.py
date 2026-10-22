@@ -24,10 +24,10 @@ pd.set_option("display.max_colwidth", None)
 
 analysis_mode = "all"
 use_ao_seeing = False
-force_bin1 = True
+force_bin1 = False
 # With force_bin1: bin1 corrects the number of modes of the original binning
 # (optical gains rescaled by main_saeb) instead of its own 630 modes.
-force_bin1_keep_modes = True
+force_bin1_keep_modes = False
 TT_REFERENCE_WAVELENGTH_NM = 1650.0
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results" / "LBT"
