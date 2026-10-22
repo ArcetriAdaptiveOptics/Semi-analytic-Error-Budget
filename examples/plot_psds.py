@@ -18,6 +18,7 @@ from src.Functions import (
     funct_d2,
     radial_order_from_n_modes,
 )
+from src.config_utils import resolve_binning_config
 
 
 def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
@@ -28,6 +29,8 @@ def plot_system_psds(mode_index=0, plot_inputs=False, show_plot=True,
     # 1. Load parameters
     #param = load_parameters('params_ANDES.yaml')
     param = load_parameters('params_SOUL.yaml')
+    # SOUL defines n_modes, matrices and OG files per binning
+    param = resolve_binning_config(param)
 
     if n_modes is not None:
         n_actuators = n_modes
