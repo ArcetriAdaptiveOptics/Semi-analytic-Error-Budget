@@ -210,3 +210,4 @@ __marimo__/
 *.swp
 /.vscode
 examples/optimization_leaky_singlemode.py
+/tmp

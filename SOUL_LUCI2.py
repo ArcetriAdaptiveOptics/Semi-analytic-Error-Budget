@@ -23,8 +23,11 @@ pd.set_option("display.width", None)
 pd.set_option("display.max_colwidth", None)
 
 analysis_mode = "all"
-use_ao_seeing = True
+use_ao_seeing = False
 force_bin1 = False
+# With force_bin1: bin1 corrects the number of modes of the original binning
+# (optical gains rescaled by main_saeb) instead of its own 630 modes.
+force_bin1_keep_modes = False
 TT_REFERENCE_WAVELENGTH_NM = 1650.0
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = BASE_DIR / "results" / "LBT"
@@ -197,12 +200,15 @@ def plot_sr_and_tt_comparisons(df_summary):
 #  the output dictionary.
 
 
-def run_saeb(seeing, magnitude, binning, ao_framerate, output_info):
-   
+def run_saeb(seeing, magnitude, binning, ao_framerate, output_info, modes_from_bin=None):
+
     param = load_parameters("params_Total_variance_SOUL_LUCI2.yaml")
     param["atmosphere"]["seeing"] = float(seeing)
     param["guide_star"]["magn"] = float(magnitude)
     param["control"]["bin"] = int(binning)
+    if modes_from_bin is not None:
+        configs = param["binning_configs"]
+        configs[int(binning)]["n_modes"] = configs[int(modes_from_bin)]["n_modes"]
     sampling_time = 1.0 / float(ao_framerate)
     param["control"]["sampling_time"] = sampling_time
 
@@ -281,6 +287,7 @@ if "SR_SLOPES_TTFREE" in table.dtype.names:
     df_columns["SR_SLOPES_TTFREE"] = to_native_endian(table["SR_SLOPES_TTFREE"][0])
 
 df = pd.DataFrame(df_columns)
+df["BINNING_ORIG"] = df["BINNING"]
 
 if force_bin1:
     df["BINNING"] = 1
@@ -328,6 +335,7 @@ if analysis_mode == "single":
         "STAR_ID": row["STAR_ID"],
         "AO_FRAMERATE": row["AO_FRAMERATE"],
         "BINNING": row["BINNING"],
+        "BINNING_ORIG": row["BINNING_ORIG"],
         "DIMM": row["DIMM"],
         "AO_SEEING": row["AO_SEEING"],
         "LAMBDA_LUCI": row["LAMBDA_LUCI"],
@@ -358,8 +366,10 @@ if analysis_mode == "single":
     else:
         seeing_single = row["DIMM"]  
         
+    modes_from_bin = row["BINNING_ORIG"] if force_bin1 and force_bin1_keep_modes else None
     output = run_saeb(seeing=seeing_single, magnitude=row["WFS_MAG"], binning=row["BINNING"],
-                      ao_framerate=row["AO_FRAMERATE"], output_info=output_info)
+                      ao_framerate=row["AO_FRAMERATE"], output_info=output_info,
+                      modes_from_bin=modes_from_bin)
     
     print("\nOUTPUT:", output)
     
@@ -384,14 +394,15 @@ if analysis_mode == "single":
 
 elif analysis_mode == "all":
 
-    grouped = df.groupby(["STAR_ID", "BINNING", "AO_FRAMERATE"])
-    
+    # BINNING_ORIG keeps the same groups as without force_bin1.
+    grouped = df.groupby(["STAR_ID", "BINNING", "BINNING_ORIG", "AO_FRAMERATE"])
+
     print("\nNumber of groups:")
     print(len(grouped))
 
     summary = []
-    
-    for (star_id, binning, ao_framerate), group_df in grouped:
+
+    for (star_id, binning, binning_orig, ao_framerate), group_df in grouped:
 
         print("\n" + "=" * 80)
     
@@ -464,6 +475,7 @@ elif analysis_mode == "all":
             "TN": tn_case,
             "STAR_ID": star_id,
             "BINNING": binning,
+            "BINNING_ORIG": binning_orig,
             "AO_FRAMERATE": ao_framerate,
             "SEEING_MEDIAN": seeing_median,
             "WFS_MAG_MEDIAN": wfs_mag_median,
@@ -474,8 +486,10 @@ elif analysis_mode == "all":
             "TT_RESIDUAL_NM": tt_residual_nm
          }
     
-        output = run_saeb(seeing=seeing_median, magnitude=wfs_mag_median, binning=binning, 
-                          ao_framerate=ao_framerate, output_info=output_info)
+        modes_from_bin = binning_orig if force_bin1 and force_bin1_keep_modes else None
+        output = run_saeb(seeing=seeing_median, magnitude=wfs_mag_median, binning=binning,
+                          ao_framerate=ao_framerate, output_info=output_info,
+                          modes_from_bin=modes_from_bin)
     
         summary.append(output)
     
